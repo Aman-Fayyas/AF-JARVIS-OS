@@ -57,11 +57,15 @@ jobs:
           set -euo pipefail
           qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -monitor unix:/tmp/bios-monitor.sock,server,nowait >bios-qemu.log 2>&1 &
           pid=$!
-          sleep 120
+          sleep 15
           kill -0 "$pid"
-          printf 'screendump bios-screen.ppm\ninfo status\nquit\n' | socat - UNIX-CONNECT:/tmp/bios-monitor.sock
+          printf 'screendump bios-menu.ppm\nsendkey ret\n' | socat - UNIX-CONNECT:/tmp/bios-monitor.sock
+          sleep 180
+          kill -0 "$pid"
+          printf 'screendump bios-desktop.ppm\ninfo status\nquit\n' | socat - UNIX-CONNECT:/tmp/bios-monitor.sock
           wait "$pid"
-          test -s bios-screen.ppm
+          test -s bios-menu.ppm
+          test -s bios-desktop.ppm
       - name: UEFI boot test
         run: |
           set -euo pipefail
@@ -69,19 +73,25 @@ jobs:
           test -n "$OVMF_CODE"
           qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -monitor unix:/tmp/uefi-monitor.sock,server,nowait >uefi-qemu.log 2>&1 &
           pid=$!
-          sleep 120
+          sleep 15
           kill -0 "$pid"
-          printf 'screendump uefi-screen.ppm\ninfo status\nquit\n' | socat - UNIX-CONNECT:/tmp/uefi-monitor.sock
+          printf 'screendump uefi-menu.ppm\nsendkey ret\n' | socat - UNIX-CONNECT:/tmp/uefi-monitor.sock
+          sleep 180
+          kill -0 "$pid"
+          printf 'screendump uefi-desktop.ppm\ninfo status\nquit\n' | socat - UNIX-CONNECT:/tmp/uefi-monitor.sock
           wait "$pid"
-          test -s uefi-screen.ppm
+          test -s uefi-menu.ppm
+          test -s uefi-desktop.ppm
       - name: Upload boot logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: AF-JARVIS-QEMU-boot-logs
           path: |
-            bios-screen.ppm
-            uefi-screen.ppm
+            bios-menu.ppm
+            bios-desktop.ppm
+            uefi-menu.ppm
+            uefi-desktop.ppm
             bios-qemu.log
             uefi-qemu.log
           if-no-files-found: warn
