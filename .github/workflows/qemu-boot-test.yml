@@ -1,0 +1,85 @@
+name: QEMU Boot Test AF JARVIS OS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qemu-boot-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debootstrap rsync qemu-system-x86 ovmf
+      - name: Create Debian 13 builder
+        run: |
+          sudo mkdir -p /opt/af-jarvis-debian
+          sudo debootstrap --arch=amd64 trixie /opt/af-jarvis-debian http://deb.debian.org/debian
+          sudo mount --bind /dev /opt/af-jarvis-debian/dev
+          sudo mount --bind /dev/pts /opt/af-jarvis-debian/dev/pts
+          sudo mount -t proc proc /opt/af-jarvis-debian/proc
+          sudo mount -t sysfs sys /opt/af-jarvis-debian/sys
+          sudo cp /etc/resolv.conf /opt/af-jarvis-debian/etc/resolv.conf
+          sudo mkdir -p /opt/af-jarvis-debian/work/AF-JARVIS-OS
+          sudo rsync -a --delete --exclude .git ./ /opt/af-jarvis-debian/work/AF-JARVIS-OS/
+          sudo tee /opt/af-jarvis-debian/etc/apt/sources.list >/dev/null <<'EOF'
+          deb http://deb.debian.org/debian trixie main contrib non-free-firmware
+          deb http://deb.debian.org/debian trixie-updates main contrib non-free-firmware
+          deb http://security.debian.org/debian-security trixie-security main contrib non-free-firmware
+          EOF
+      - name: Install build dependencies
+        run: |
+          sudo chroot /opt/af-jarvis-debian /bin/bash -lc 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y live-build debootstrap squashfs-tools xorriso isolinux syslinux-common grub-pc-bin grub-efi-amd64-bin mtools dosfstools rsync ripgrep openssl python3'
+      - name: Build ISO
+        run: |
+          sudo chroot /opt/af-jarvis-debian /bin/bash -lc '
+            set -euo pipefail
+            cd /work/AF-JARVIS-OS
+            HASH_FILE=/tmp/af-jarvis-ci-password.hash
+            install -m 600 /dev/null "$HASH_FILE"
+            RANDOM_PASSWORD=$(openssl rand -hex 16)
+            openssl passwd -6 "$RANDOM_PASSWORD" > "$HASH_FILE"
+            unset RANDOM_PASSWORD
+            chmod 600 "$HASH_FILE"
+            export JARVIS_LIVE_PASSWORD_HASH_FILE="$HASH_FILE"
+            bash scripts/build-iso.sh --build /work/AF-JARVIS-OS/build/qemu-validation
+            rm -f "$HASH_FILE"
+          '
+          sudo cp /opt/af-jarvis-debian/work/AF-JARVIS-OS/build/qemu-validation/AF-JARVIS-OS-v0.1-alpha.iso .
+          sudo chown "$USER:$USER" AF-JARVIS-OS-v0.1-alpha.iso
+      - name: BIOS boot test
+        run: |
+          timeout 120s qemu-system-x86_64 -machine accel=kvm:tcg -cpu host -m 1536 -smp 2 -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -serial file:bios-serial.log || rc=$?
+          rc=${rc:-0}
+          test "$rc" -eq 0 -o "$rc" -eq 124
+          test -s bios-serial.log
+      - name: UEFI boot test
+        run: |
+          OVMF_CODE=$(find /usr/share/OVMF -type f \( -name 'OVMF_CODE_4M.fd' -o -name 'OVMF_CODE.fd' \) | head -n1)
+          test -n "$OVMF_CODE"
+          timeout 120s qemu-system-x86_64 -machine accel=kvm:tcg -cpu host -m 1536 -smp 2 -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -serial file:uefi-serial.log || rc=$?
+          rc=${rc:-0}
+          test "$rc" -eq 0 -o "$rc" -eq 124
+          test -s uefi-serial.log
+      - name: Upload boot logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AF-JARVIS-QEMU-boot-logs
+          path: |
+            bios-serial.log
+            uefi-serial.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Cleanup
+        if: always()
+        run: |
+          sudo umount -l /opt/af-jarvis-debian/dev/pts 2>/dev/null || true
+          sudo umount -l /opt/af-jarvis-debian/dev 2>/dev/null || true
+          sudo umount -l /opt/af-jarvis-debian/proc 2>/dev/null || true
+          sudo umount -l /opt/af-jarvis-debian/sys 2>/dev/null || true
