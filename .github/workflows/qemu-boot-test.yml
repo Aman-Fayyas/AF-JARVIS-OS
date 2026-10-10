@@ -15,7 +15,7 @@ jobs:
       - name: Install host tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap rsync qemu-system-x86 ovmf
+          sudo apt-get install -y debootstrap rsync qemu-system-x86 ovmf socat
       - name: Create Debian 13 builder
         run: |
           sudo mkdir -p /opt/af-jarvis-debian
@@ -54,26 +54,36 @@ jobs:
           sudo chown "$USER:$USER" AF-JARVIS-OS-v0.1-alpha.iso
       - name: BIOS boot test
         run: |
-          timeout 120s qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -serial file:bios-serial.log || rc=$?
-          rc=${rc:-0}
-          test "$rc" -eq 0 -o "$rc" -eq 124
-          test -s bios-serial.log
+          set -euo pipefail
+          qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -monitor unix:/tmp/bios-monitor.sock,server,nowait >bios-qemu.log 2>&1 &
+          pid=$!
+          sleep 120
+          kill -0 "$pid"
+          printf 'screendump bios-screen.ppm\ninfo status\nquit\n' | socat - UNIX-CONNECT:/tmp/bios-monitor.sock
+          wait "$pid"
+          test -s bios-screen.ppm
       - name: UEFI boot test
         run: |
+          set -euo pipefail
           OVMF_CODE=$(find /usr/share/OVMF -type f \( -name 'OVMF_CODE_4M.fd' -o -name 'OVMF_CODE.fd' \) | head -n1)
           test -n "$OVMF_CODE"
-          timeout 120s qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -serial file:uefi-serial.log || rc=$?
-          rc=${rc:-0}
-          test "$rc" -eq 0 -o "$rc" -eq 124
-          test -s uefi-serial.log
+          qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -monitor unix:/tmp/uefi-monitor.sock,server,nowait >uefi-qemu.log 2>&1 &
+          pid=$!
+          sleep 120
+          kill -0 "$pid"
+          printf 'screendump uefi-screen.ppm\ninfo status\nquit\n' | socat - UNIX-CONNECT:/tmp/uefi-monitor.sock
+          wait "$pid"
+          test -s uefi-screen.ppm
       - name: Upload boot logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: AF-JARVIS-QEMU-boot-logs
           path: |
-            bios-serial.log
-            uefi-serial.log
+            bios-screen.ppm
+            uefi-screen.ppm
+            bios-qemu.log
+            uefi-qemu.log
           if-no-files-found: warn
           retention-days: 7
       - name: Cleanup
