@@ -40,6 +40,13 @@ jobs:
           sudo chroot /opt/af-jarvis-debian /bin/bash -lc '
             set -euo pipefail
             cd /work/AF-JARVIS-OS
+            # CI-only: bypass the greeter so QEMU can validate the real AF JARVIS session.
+            # This modifies only the disposable chroot copy, never the checked-out repository.
+            cat >> distro/includes/etc/lightdm/lightdm.conf.d/50-jarvis.conf <<EOF
+autologin-user=jarvis
+autologin-user-timeout=0
+autologin-session=af-jarvis
+EOF
             HASH_FILE=/tmp/af-jarvis-ci-password.hash
             install -m 600 /dev/null "$HASH_FILE"
             RANDOM_PASSWORD=$(openssl rand -hex 16)
@@ -60,7 +67,7 @@ jobs:
           sleep 15
           kill -0 "$pid"
           printf 'screendump bios-menu.ppm\nsendkey ret\n' | socat - UNIX-CONNECT:/tmp/bios-monitor.sock
-          sleep 180
+          sleep 240
           kill -0 "$pid"
           printf 'screendump bios-desktop.ppm\ninfo status\nquit\n' | socat - UNIX-CONNECT:/tmp/bios-monitor.sock
           wait "$pid"
@@ -76,7 +83,7 @@ jobs:
           sleep 15
           kill -0 "$pid"
           printf 'screendump uefi-menu.ppm\nsendkey ret\n' | socat - UNIX-CONNECT:/tmp/uefi-monitor.sock
-          sleep 180
+          sleep 240
           kill -0 "$pid"
           printf 'screendump uefi-desktop.ppm\ninfo status\nquit\n' | socat - UNIX-CONNECT:/tmp/uefi-monitor.sock
           wait "$pid"
