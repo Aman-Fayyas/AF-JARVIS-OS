@@ -74,7 +74,9 @@ jobs:
             cd /work/AF-JARVIS-OS
             umask 077
             HASH_FILE=/tmp/af-jarvis-ci-password.hash
+            install -m 600 /dev/null "$HASH_FILE"
             openssl passwd -6 "jarvis-ci-live" > "$HASH_FILE"
+            chmod 600 "$HASH_FILE"
             export JARVIS_LIVE_PASSWORD_HASH_FILE="$HASH_FILE"
             bash scripts/build-iso.sh --build /work/AF-JARVIS-OS/build/github-actions
             rm -f "$HASH_FILE"
