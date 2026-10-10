@@ -54,7 +54,7 @@ jobs:
           sudo chown "$USER:$USER" AF-JARVIS-OS-v0.1-alpha.iso
       - name: BIOS boot test
         run: |
-          timeout 120s qemu-system-x86_64 -machine accel=kvm:tcg -cpu host -m 1536 -smp 2 -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -serial file:bios-serial.log || rc=$?
+          timeout 120s qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -serial file:bios-serial.log || rc=$?
           rc=${rc:-0}
           test "$rc" -eq 0 -o "$rc" -eq 124
           test -s bios-serial.log
@@ -62,7 +62,7 @@ jobs:
         run: |
           OVMF_CODE=$(find /usr/share/OVMF -type f \( -name 'OVMF_CODE_4M.fd' -o -name 'OVMF_CODE.fd' \) | head -n1)
           test -n "$OVMF_CODE"
-          timeout 120s qemu-system-x86_64 -machine accel=kvm:tcg -cpu host -m 1536 -smp 2 -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -serial file:uefi-serial.log || rc=$?
+          timeout 120s qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" -cdrom AF-JARVIS-OS-v0.1-alpha.iso -boot d -display none -no-reboot -serial file:uefi-serial.log || rc=$?
           rc=${rc:-0}
           test "$rc" -eq 0 -o "$rc" -eq 124
           test -s uefi-serial.log
