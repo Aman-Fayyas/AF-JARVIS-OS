@@ -1,0 +1,6 @@
+[project]
+name = "af-jarvis-os-core"
+version = "0.1.0a1"
+description = "Lightweight local-first Linux AI control node"
+requires-python = ">=3.11"
+# Run as a source tree; GTK/PyGObject supplied by Debian, not pip wheels.

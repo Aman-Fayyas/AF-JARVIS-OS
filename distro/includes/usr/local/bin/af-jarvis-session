@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+# LightDM/PAM creates XDG_RUNTIME_DIR and the normal user DBus session.
+export XDG_CURRENT_DESKTOP=AFJARVIS
+export XDG_SESSION_DESKTOP=af-jarvis
+systemctl --user import-environment DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP || echo 'AF JARVIS: user manager unavailable; desktop will still start.' >&2
+if command -v dbus-update-activation-environment >/dev/null; then
+    dbus-update-activation-environment --systemd DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP || echo 'AF JARVIS: DBus environment import failed.' >&2
+fi
+systemctl --user start --no-block jarvis-core.service || echo 'AF JARVIS: Core unavailable; normal desktop tools remain available.' >&2
+# Curated startup avoids executing the same applets again through XDG autostart.
+# Openbox uses the existing rc.xml/menu.xml; no compositor or alternate desktop.
+trap 'systemctl --user stop jarvis-core.service >/dev/null 2>&1 || true' EXIT
+openbox --startup '/bin/sh /etc/xdg/openbox/autostart'

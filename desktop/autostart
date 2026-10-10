@@ -1,0 +1,10 @@
+#!/bin/sh
+# OS desktop remains usable if Core/UI exits. No compositor or browser at idle.
+xsetroot -solid '#080f1c' &
+tint2 &
+nm-applet &
+xfce4-power-manager &
+xss-lock --transfer-sleep-lock -- i3lock --nofork --color=080f1c &
+lxpolkit &
+# On-demand Bluetooth, voice recognition and browser; no idle model process.
+af-jarvis-desktop &

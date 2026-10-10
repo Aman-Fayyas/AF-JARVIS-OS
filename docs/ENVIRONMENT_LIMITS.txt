@@ -1,0 +1,11 @@
+Observed 2026-10-10 in the development workspace:
+- Host userland: Ubuntu 24.04.3 LTS (Noble), not target Debian 13.
+- CapEff/CapPrm/CapBnd: zero. A tmpfs mount probe returned errno 1 (Operation not permitted), with no mount created.
+- Production UnixStreamServer socket creation returned PermissionError EPERM. No production Unix IPC test passed here.
+- Latest systemd-analyze --user verify failed on socket/system-bus EPERM and missing image ExecStart path on this host. Unit behavior was not runtime-validated; exact output is in environment-audit.json.
+- live-build, debootstrap and qemu-system-x86_64 are not installed; there is no ISO and no VM boot test.
+- Python 3.12 plus GTK3/PyGObject and Xvfb could run using previously downloaded dependencies.
+- Native GTK integration used a synthetic authenticated OpenAI HTTP node and a test-only ephemeral loopback Core transport. Production Core remains Unix-only.
+- Core/native GTK tests, actual screenshot and static build validation passed. See the recorded test outputs and JSON measurements.
+- Current audit: 33 automated checks pass. Actual ISO build exits 1 at preflight, including a real denied tmpfs mount. QEMU launcher exits 1 because QEMU is absent. No ISO or guest boot exists.
+- A separate 60-second process-idle run measured Core 17.22 MiB RSS / 13.28 MiB PSS and GTK 73.97 / 59.53 MiB. These are not whole-system measurements.

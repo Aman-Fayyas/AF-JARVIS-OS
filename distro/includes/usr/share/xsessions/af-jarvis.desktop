@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=AF JARVIS OS
+Comment=Lightweight Openbox desktop with native JARVIS control node
+Exec=/usr/local/bin/af-jarvis-session
+Type=Application
+DesktopNames=AFJARVIS

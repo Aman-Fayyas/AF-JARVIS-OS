@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-10",
+  "booted_af_jarvis": false,
+  "kernel": "6.18.44",
+  "os_release": "PRETTY_NAME=\"Ubuntu 24.04.3 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.3 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+  "capabilities": [
+    "CapInh:\t0000000000000000",
+    "CapPrm:\t0000000000000000",
+    "CapEff:\t0000000000000000",
+    "CapBnd:\t0000000000000000",
+    "CapAmb:\t0000000000000000"
+  ],
+  "dev_kvm": false,
+  "boot_files": [],
+  "unix_socket_creation": "PermissionError(1, 'Operation not permitted')",
+  "production_core_root_guard": {
+    "exit_code": 2,
+    "stdout": "",
+    "stderr": "usage: server.py [-h] [--config-dir CONFIG_DIR] [--data-dir DATA_DIR]\n                 [--allow-root-for-tests]\nserver.py: error: JARVIS Core must run as a non-root user\n"
+  },
+  "production_unix_startup_test_flag": {
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/workspace/scratch/d19a9de1a854/af-jarvis-os/jarvis/server.py\", line 116, in <module>\n    main()\n  File \"/workspace/scratch/d19a9de1a854/af-jarvis-os/jarvis/server.py\", line 99, in main\n    with Server(str(path), Handler) as server:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/socketserver.py\", line 453, in __init__\n    self.socket = socket.socket(self.address_family,\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/socket.py\", line 233, in __init__\n    _socket.socket.__init__(self, family, type, proto, fileno)\nPermissionError: [Errno 1] Operation not permitted\n"
+  },
+  "user_namespace": {
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "unshare: write failed /proc/self/uid_map: Operation not permitted\n"
+  },
+  "user_systemd_verify": {
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Failed to allocate private socket: Operation not permitted\nFailed to connect to system bus: Operation not permitted\njarvis-core.service: Command /usr/local/bin/af-jarvis-core is not executable: No such file or directory\n"
+  }
+}

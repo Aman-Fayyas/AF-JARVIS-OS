@@ -1,0 +1,16 @@
+panel_items = TSC
+panel_size = 100% 32
+panel_position = bottom center horizontal
+panel_background_id = 1
+rounded = 0
+border_width = 1
+background_color = #101c2c 100
+border_color = #28506a 100
+taskbar_mode = multi_desktop
+task_text = 1
+task_icon = 1
+systray_padding = 6 2 4
+time1_format = %H:%M
+time2_format = %a %d %b
+clock_font_color = #72e5ff 100
+clock_padding = 8 0

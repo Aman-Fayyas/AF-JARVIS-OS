@@ -1,0 +1,76 @@
+# Copied to ~/.config/af-jarvis/config.toml on first start.
+mode = "local_first" # local_only, local_first, ask_before_cloud, cloud_preferred
+cloud_enabled = false
+memory_enabled = true
+history_enabled = true
+retention_days = 30
+timeout_seconds = 30
+max_response_chars = 48000
+
+[[nodes]]
+id = "tablet"
+label = "Tab A7 Lite"
+enabled = false
+kind = "local"
+url = "http://127.0.0.1:8080/v1"
+model = "smollm2-360m"
+key_file = "secrets/tablet.key"
+context_tokens = 2048
+max_tokens = 256
+# Plain HTTP exposes prompts and the key to LAN observers. Prefer SSH tunnel
+# to http://127.0.0.1:8080/v1 or HTTPS with a trusted certificate.
+allow_insecure_lan = false
+
+[[nodes]]
+id = "advanced"
+label = "Advanced local node"
+enabled = false
+kind = "advanced_local"
+url = "http://127.0.0.1:8081/v1"
+model = "qwen3-1.7b"
+key_file = "secrets/advanced.key"
+context_tokens = 4096
+max_tokens = 512
+allow_insecure_lan = false
+
+[[cloud]]
+id = "groq"
+label = "Groq"
+enabled = false
+kind = "cloud"
+url = "https://api.groq.com/openai/v1"
+model = "" # Choose a currently available model from the provider dashboard.
+key_file = "secrets/groq.key"
+context_tokens = 8192
+max_tokens = 1024
+
+[[cloud]]
+id = "gemini"
+label = "Gemini"
+enabled = false
+kind = "cloud"
+url = "https://generativelanguage.googleapis.com/v1beta/openai"
+model = ""
+key_file = "secrets/gemini.key"
+context_tokens = 8192
+max_tokens = 1024
+
+[[cloud]]
+id = "openrouter"
+label = "OpenRouter"
+enabled = false
+kind = "cloud"
+url = "https://openrouter.ai/api/v1"
+model = "" # Explicitly choose a free model if avoiding paid inference.
+key_file = "secrets/openrouter.key"
+context_tokens = 8192
+max_tokens = 1024
+
+[search]
+enabled = false
+url = "http://127.0.0.1:8888" # Your own authenticated/private SearXNG instance.
+allow_insecure_lan = false
+
+[voice]
+tts = true
+stt_model = "" # Optional offline Vosk model directory; loaded only on demand.

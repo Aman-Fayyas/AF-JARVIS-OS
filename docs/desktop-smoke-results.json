@@ -1,0 +1,25 @@
+{
+  "environment": "Ubuntu 24.04 container, GTK3 on Xvfb; test fixture AI",
+  "checks": [
+    "framed IPC status",
+    "native GTK launch",
+    "deterministic command",
+    "true SSE token display",
+    "local history",
+    "memory save/view",
+    "route label",
+    "Core failure leaves desktop responsive",
+    "actual Gio test-utility launch with Core stopped"
+  ],
+  "transport": "TEST ONLY loopback fixture; Unix bind prohibited here",
+  "unix_permissions": "UNTESTED here",
+  "core": {
+    "rss_mib": 18.51,
+    "pss_mib": 14.42
+  },
+  "desktop_with_test_harness": {
+    "rss_mib": 77.91,
+    "pss_mib": 63.49
+  },
+  "whole_os_idle_ram": "UNMEASURED: no booted AF JARVIS OS VM/hardware"
+}

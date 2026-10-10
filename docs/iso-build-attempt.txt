@@ -1,0 +1,22 @@
+{
+  "host": "Ubuntu 24.04.3 LTS",
+  "architecture": "x86_64",
+  "supported_host": false,
+  "uid": 0,
+  "cap_sys_admin_effective": false,
+  "missing_build_commands": [
+    "lb",
+    "debootstrap",
+    "mksquashfs",
+    "xorriso",
+    "mcopy",
+    "mkfs.vfat",
+    "grub-mkstandalone"
+  ],
+  "qemu_available": false,
+  "kvm_available": false,
+  "mount_probe": "mount: /tmp/af-jarvis-mount-6wcp6ecl: permission denied.\n       dmesg(1) may have more information after failed mount system call.",
+  "install_build_dependencies": "sudo apt update && sudo apt install live-build debootstrap squashfs-tools xorriso isolinux syslinux-common grub-pc-bin grub-efi-amd64-bin mtools dosfstools rsync ripgrep openssl python3",
+  "install_boot_test_dependencies": "sudo apt install qemu-system-x86 ovmf",
+  "requirement": "Debian 13 amd64 VM or physical machine; sudo/root with mount and chroot privileges. A rootless/restricted container is insufficient."
+}

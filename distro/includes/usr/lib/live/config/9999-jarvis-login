@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+jarvis_login_state=/var/lib/live/config/jarvis-login
+if [ -e "$jarvis_login_state" ]; then
+    exit 0
+fi
+if ! getent passwd jarvis >/dev/null; then
+    echo 'AF JARVIS: live user missing; refusing to configure login.' >&2
+    exit 1
+fi
+jarvis_hash_file=/etc/af-jarvis/live-password.hash
+if [ ! -r "$jarvis_hash_file" ]; then
+    passwd -l jarvis
+    echo 'AF JARVIS: no password hash; live login remains locked.' >&2
+    exit 1
+fi
+jarvis_password_hash=$(cat "$jarvis_hash_file")
+case "$jarvis_password_hash" in
+    '$6$'*) usermod -p "$jarvis_password_hash" jarvis ;;
+    *) passwd -l jarvis; exit 1 ;;
+esac
+usermod -aG sudo jarvis
+rm -f /etc/sudoers.d/live
+unset jarvis_password_hash
+install -d /var/lib/live/config
+touch "$jarvis_login_state"
+# This only changes the live overlay; the ISO is immutable and contains the hash.
+rm -f "$jarvis_hash_file"

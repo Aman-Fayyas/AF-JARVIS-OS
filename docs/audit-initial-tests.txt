@@ -1,0 +1,25 @@
+test_cancel_stalled_stream_without_blocking (test_core.CoreTests.test_cancel_stalled_stream_without_blocking) ... ok
+test_cloud_receives_only_current_question (test_core.CoreTests.test_cloud_receives_only_current_question) ... ok
+test_confirmation_expiry_and_folder_traversal (test_core.CoreTests.test_confirmation_expiry_and_folder_traversal) ... ok
+test_context_is_bounded_and_rejects_oversize (test_core.CoreTests.test_context_is_bounded_and_rejects_oversize) ... ok
+test_deterministic_bypasses_inference (test_core.CoreTests.test_deterministic_bypasses_inference) ... ok
+test_disabling_history_does_not_store_conversations (test_core.CoreTests.test_disabling_history_does_not_store_conversations) ... ok
+test_failure_does_not_disable_system (test_core.CoreTests.test_failure_does_not_disable_system) ... ok
+test_large_unicode_history_is_framed (test_core.CoreTests.test_large_unicode_history_is_framed) ... ok
+test_memory_search_confirm_delete_replay (test_core.CoreTests.test_memory_search_confirm_delete_replay) ... ok
+test_no_redirect_or_public_local_endpoint (test_core.CoreTests.test_no_redirect_or_public_local_endpoint) ... ok
+test_partial_failure_not_saved_or_concatenated (test_core.CoreTests.test_partial_failure_not_saved_or_concatenated) ... ok
+test_private_keys_and_config_persistence (test_core.CoreTests.test_private_keys_and_config_persistence) ... ok
+test_probe_authentication (test_core.CoreTests.test_probe_authentication) ... ok
+test_quota_fallback_to_second_local_node (test_core.CoreTests.test_quota_fallback_to_second_local_node) ... ok
+test_real_sse_and_history (test_core.CoreTests.test_real_sse_and_history) ... ok
+test_regenerate_trims_previous_pair (test_core.CoreTests.test_regenerate_trims_previous_pair) ... ok
+test_router_modes_and_sensitive_data (test_core.CoreTests.test_router_modes_and_sensitive_data) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 9.471s
+
+OK
+Build tree: required assets, shell syntax, XML and package list validated.
+Build tree prepared and statically validated: /tmp/tmp.sTG1y93BGi/live
+No ISO was built. Use --build on a supported privileged Debian builder.

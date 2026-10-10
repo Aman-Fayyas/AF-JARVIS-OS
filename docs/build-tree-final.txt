@@ -1,0 +1,3 @@
+Build tree: required assets, shell syntax, XML and package list validated.
+Build tree prepared and statically validated: /workspace/scratch/d19a9de1a854/build-final-review
+No ISO was built. Use --build on a supported privileged Debian builder.

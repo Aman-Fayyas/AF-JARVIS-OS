@@ -1,0 +1,16 @@
+[Unit]
+Description=AF JARVIS lightweight control core
+StartLimitIntervalSec=60
+StartLimitBurst=4
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/af-jarvis-core
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+# Core launches X11 tools as the logged-in user; it must see the session /tmp.
+# PrivateTmp in user units also depends on unprivileged user namespaces.
+RestrictSUIDSGID=true
+# Core stays unprivileged. Reboot is mediated by logind; no package root access.

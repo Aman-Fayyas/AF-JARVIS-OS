@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+cd /opt/af-jarvis
+exec /usr/bin/python3 -m jarvis.desktop "$@"

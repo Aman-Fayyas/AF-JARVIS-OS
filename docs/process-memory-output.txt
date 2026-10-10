@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-10",
+  "environment": "Ubuntu 24.04 container, native GTK3/Xvfb",
+  "idle_seconds": 60,
+  "ai_providers_enabled": false,
+  "transport": "TEST ONLY loopback Core transport; production AF_UNIX unavailable",
+  "core_process": {
+    "rss_mib": 17.22,
+    "pss_mib": 13.28
+  },
+  "gtk_process": {
+    "rss_mib": 73.97,
+    "pss_mib": 59.53
+  },
+  "whole_af_jarvis_os_idle_ram": "UNMEASURED: Linux/Openbox/LightDM/audio/network services were not booted"
+}

@@ -1,0 +1,41 @@
+test_boot_and_service_security_assets (test_boot_assets.BootAssetsTests.test_boot_and_service_security_assets) ... ok
+test_iso_validator_requires_both_firmware_entries_and_payload (test_boot_assets.BootAssetsTests.test_iso_validator_requires_both_firmware_entries_and_payload) ... ok
+test_login_hook_idempotence_and_missing_hash_lock (test_boot_assets.BootAssetsTests.test_login_hook_idempotence_and_missing_hash_lock) ... ok
+test_renamed_archive_rejected_as_iso (test_boot_assets.BootAssetsTests.test_renamed_archive_rejected_as_iso) ... ok
+test_session_starts_openbox_when_user_services_fail (test_boot_assets.BootAssetsTests.test_session_starts_openbox_when_user_services_fail) ... ok
+test_cancel_stalled_stream_without_blocking (test_core.CoreTests.test_cancel_stalled_stream_without_blocking) ... ok
+test_close_at_first_event_releases_generation (test_core.CoreTests.test_close_at_first_event_releases_generation) ... ok
+test_cloud_http_quota_and_outage_fall_back_to_local (test_core.CoreTests.test_cloud_http_quota_and_outage_fall_back_to_local) ... ok
+test_cloud_receives_only_current_question (test_core.CoreTests.test_cloud_receives_only_current_question) ... ok
+test_confirmation_expiry_and_folder_traversal (test_core.CoreTests.test_confirmation_expiry_and_folder_traversal) ... ok
+test_context_is_bounded_and_rejects_oversize (test_core.CoreTests.test_context_is_bounded_and_rejects_oversize) ... ok
+test_deterministic_bypasses_inference (test_core.CoreTests.test_deterministic_bypasses_inference) ... ok
+test_disabled_cloud_does_not_request_consent (test_core.CoreTests.test_disabled_cloud_does_not_request_consent) ... ok
+test_disabling_history_does_not_store_conversations (test_core.CoreTests.test_disabling_history_does_not_store_conversations) ... ok
+test_failed_reload_preserves_working_configuration (test_core.CoreTests.test_failed_reload_preserves_working_configuration) ... ok
+test_failure_does_not_disable_system (test_core.CoreTests.test_failure_does_not_disable_system) ... ok
+test_folder_creation_requires_confirmation (test_core.CoreTests.test_folder_creation_requires_confirmation) ... ok
+test_large_unicode_facts_fit_ipc_and_remain_saved (test_core.CoreTests.test_large_unicode_facts_fit_ipc_and_remain_saved) ... ok
+test_large_unicode_history_is_framed (test_core.CoreTests.test_large_unicode_history_is_framed) ... ok
+test_llm_text_never_becomes_a_system_action (test_core.CoreTests.test_llm_text_never_becomes_a_system_action) ... ok
+test_malformed_models_report_provider_error (test_core.CoreTests.test_malformed_models_report_provider_error) ... ok
+test_malformed_sse_shapes_fail_cleanly (test_core.CoreTests.test_malformed_sse_shapes_fail_cleanly) ... ok
+test_memory_search_confirm_delete_replay (test_core.CoreTests.test_memory_search_confirm_delete_replay) ... ok
+test_no_redirect_or_public_local_endpoint (test_core.CoreTests.test_no_redirect_or_public_local_endpoint) ... ok
+test_partial_failure_not_saved_or_concatenated (test_core.CoreTests.test_partial_failure_not_saved_or_concatenated) ... ok
+test_privacy_changes_blocked_during_generation (test_core.CoreTests.test_privacy_changes_blocked_during_generation) ... ok
+test_private_keys_and_config_persistence (test_core.CoreTests.test_private_keys_and_config_persistence) ... ok
+test_probe_authentication (test_core.CoreTests.test_probe_authentication) ... ok
+test_provider_boolean_types_and_key_paths (test_core.CoreTests.test_provider_boolean_types_and_key_paths) ... ok
+test_quota_fallback_to_second_local_node (test_core.CoreTests.test_quota_fallback_to_second_local_node) ... ok
+test_real_sse_and_history (test_core.CoreTests.test_real_sse_and_history) ... ok
+test_regenerate_trims_previous_pair (test_core.CoreTests.test_regenerate_trims_previous_pair) ... ok
+test_router_modes_and_sensitive_data (test_core.CoreTests.test_router_modes_and_sensitive_data) ... ok
+
+----------------------------------------------------------------------
+Ran 33 tests in 15.415s
+
+OK
+Build tree: required assets, shell syntax, XML and package list validated.
+Build tree prepared and statically validated: /tmp/tmp.pYKLZaFg9l/live
+No ISO was built. Use --build on a supported privileged Debian builder.

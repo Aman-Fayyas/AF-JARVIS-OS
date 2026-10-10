@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+chmod -R a+rX /opt/af-jarvis
+chmod 755 /usr/local/bin/af-jarvis-* /usr/local/bin/jarvis /usr/lib/live/config/9999-jarvis-login
+install -d /etc/xdg/openbox /etc/xdg/tint2 /etc/skel/Downloads /etc/skel/Documents /etc/skel/Projects
+install -m 755 /opt/af-jarvis/desktop/autostart /etc/xdg/openbox/autostart
+install -m 644 /opt/af-jarvis/desktop/rc.xml /etc/xdg/openbox/rc.xml
+install -m 644 /opt/af-jarvis/desktop/menu.xml /etc/xdg/openbox/menu.xml
+install -m 644 /opt/af-jarvis/desktop/tint2rc /etc/xdg/tint2/tint2rc
+printf 'AF JARVIS OS v0.1 Alpha\nDebian 13 • lightweight control node\n' > /etc/issue
+printf 'AF JARVIS OS v0.1 Alpha\n' > /etc/motd
+# Keep networking/security/power/audio intact. No broad service disabling.
+systemctl enable NetworkManager.service lightdm.service zramswap.service
+systemctl set-default graphical.target
+# Bluetooth starts only when its GUI/DBus is requested.
+systemctl disable bluetooth.service || true
+python3 -m compileall -q /opt/af-jarvis/jarvis

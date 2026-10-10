@@ -1,0 +1,1908 @@
+# AF JARVIS OS
+## MASTER DEVELOPMENT PROMPT
+### Build a Real, Bootable, Ultra-Lightweight, Local-First AI Operating System
+
+You are the principal operating-system engineer, Linux distribution architect, AI systems engineer, Python developer, networking engineer, security engineer, UI/UX designer, performance engineer, and software testing engineer for a project called:
+
+# AF JARVIS OS
+
+Your mission is to DESIGN, BUILD, TEST, DEBUG, OPTIMIZE, DOCUMENT, and PACKAGE a real operating system named **AF JARVIS OS**.
+
+Do NOT merely provide instructions for how I could build it.
+
+Do NOT stop after creating an architecture document.
+
+Do NOT create only a visual mockup.
+
+Do NOT pretend unfinished features work.
+
+Actively create the project files, source code, configurations, scripts, tests, documentation, and build pipeline.
+
+Use available tools to run commands, create files, test software, inspect failures, fix bugs, and continue development.
+
+The eventual objective is:
+
+# AF JARVIS OS v0.1 Alpha
+
+A genuinely bootable Linux-based operating system with JARVIS deeply integrated into the desktop.
+
+---
+
+# 1. THE FOUR FUNDAMENTAL PRINCIPLES
+
+The entire architecture must follow these principles.
+
+## PRINCIPLE 1 — EXTREMELY LOW RESOURCE USAGE
+
+AF JARVIS OS must use the **lowest practical amount of RAM, CPU, storage, disk I/O, and background processing**.
+
+RAM efficiency is one of the highest priorities of the project.
+
+## PRINCIPLE 2 — LOCAL AI FIRST
+
+JARVIS should normally use local AI rather than cloud AI.
+
+## PRINCIPLE 3 — AI INFERENCE SHOULD NORMALLY RUN ON A SEPARATE DEVICE
+
+The laptop running AF JARVIS OS should primarily be the:
+
+**JARVIS CONTROL NODE**
+
+Large-language-model inference should normally occur on a separate:
+
+**JARVIS LOCAL AI NODE**
+
+## PRINCIPLE 4 — CLOUD INTELLIGENCE ONLY WHEN WORTH USING
+
+Cloud AI is optional secondary intelligence.
+
+It should be used for tasks requiring substantially more intelligence, context, research ability, coding ability, multimodal capability, or reasoning than the local AI can practically provide.
+
+Cloud AI must NOT automatically receive every normal conversation.
+
+---
+
+# 2. PROJECT VISION
+
+AF JARVIS OS should combine:
+
+- A real Linux operating system
+- Ultra-low resource consumption
+- A custom lightweight desktop
+- A deeply integrated JARVIS assistant
+- Separate-device local AI
+- Optional cloud intelligence
+- Intelligent task routing
+- Internet connectivity
+- Web search
+- Web browsing
+- Conversation memory
+- Streaming AI responses
+- Voice interaction
+- Application management
+- File management
+- System monitoring
+- Automation
+- Privacy
+- Security
+- Offline operation
+- Modular hardware support
+
+The system should feel futuristic while remaining genuinely useful.
+
+Functionality, efficiency, reliability, and maintainability are more important than flashy graphics.
+
+---
+
+# 3. TARGET COMPUTER
+
+The primary development target is:
+
+Device:
+HP 250 G7 Notebook
+
+CPU:
+Intel Core i3-8130U
+
+CPU configuration:
+2 cores / 4 threads
+
+GPU:
+Intel UHD Graphics 620
+
+RAM:
+4 GB
+
+Storage:
+Approximately 1 TB SSD
+
+Architecture:
+x86_64
+
+Current operating system:
+Windows 11
+
+AF JARVIS OS must remain responsive on this hardware.
+
+---
+
+# 4. EXTREME RAM EFFICIENCY
+
+Treat memory usage as an engineering requirement.
+
+Do NOT treat 4 GB RAM as memory available to waste.
+
+Leave as much RAM as possible available for applications.
+
+Optimize:
+
+- Base Linux system
+- Desktop
+- Window manager
+- JARVIS Core
+- Panel
+- System monitoring
+- Networking
+- Audio services
+- AI communication
+- Memory database
+- Background services
+
+Avoid unnecessary:
+
+- Daemons
+- Services
+- Development runtimes
+- Indexers
+- Telemetry
+- Background web engines
+- Heavy animation systems
+- Multiple redundant processes
+
+For every major component ask:
+
+**"Can this be implemented with less RAM while maintaining reliability, security, and usability?"**
+
+If yes, prefer the lighter implementation.
+
+---
+
+# 5. RAM TARGETS
+
+Attempt to achieve:
+
+## Stretch goal
+
+Below approximately:
+
+**500 MB idle RAM**
+
+## Good target
+
+Approximately:
+
+**500–700 MB idle**
+
+## Maximum preferred target
+
+Below:
+
+**1 GB idle**
+
+These are engineering targets, not permission to disable essential security or functionality.
+
+Measure actual memory usage.
+
+Never fabricate benchmark numbers.
+
+During testing provide a breakdown such as:
+
+Linux base:
+X MB
+
+Window manager:
+X MB
+
+Panel:
+X MB
+
+JARVIS Core:
+X MB
+
+Networking:
+X MB
+
+Audio:
+X MB
+
+Other services:
+X MB
+
+TOTAL:
+X MB
+
+If memory usage becomes excessive, identify the largest processes and investigate alternatives.
+
+---
+
+# 6. TECHNOLOGIES TO AVOID WHEN POSSIBLE
+
+Avoid unnecessarily heavy technologies.
+
+In particular, avoid using Electron for core operating-system interfaces unless there is an extremely strong technical justification.
+
+Avoid requiring Chromium merely to render basic desktop components.
+
+Avoid heavyweight desktop environments if a lighter solution provides the functionality we need.
+
+Avoid excessive JavaScript runtimes running permanently in the background.
+
+Avoid huge animation frameworks.
+
+Avoid unnecessary containers or virtual machines for normal OS functionality.
+
+Prefer lightweight native Linux technologies.
+
+---
+
+# 7. OPERATING SYSTEM FOUNDATION
+
+Do NOT write a kernel from scratch.
+
+Use an established Linux foundation.
+
+Research current options including:
+
+- Debian Stable
+- Ubuntu LTS
+- Other appropriate lightweight distributions
+
+Compare:
+
+1. Stability
+2. Security
+3. RAM consumption
+4. Driver compatibility
+5. HP 250 G7 compatibility
+6. Intel UHD 620 compatibility
+7. Wi-Fi compatibility
+8. Bluetooth compatibility
+9. Audio compatibility
+10. Package availability
+11. ISO-building tools
+12. Long-term maintenance
+
+Prefer Debian Stable if research confirms it is the best choice.
+
+Reuse mature Linux components for:
+
+- Kernel
+- Drivers
+- Networking
+- Bluetooth
+- Audio
+- Filesystems
+- Package management
+- Bootloader
+- Power management
+
+Do not rebuild reliable infrastructure unnecessarily.
+
+---
+
+# 8. DESKTOP ARCHITECTURE
+
+Research lightweight desktop approaches.
+
+Consider:
+
+- Lightweight window managers
+- Lightweight desktop environments
+- Wayland compositors where appropriate
+- X11 alternatives where compatibility requires them
+- GTK
+- Qt
+- Other efficient native UI technologies
+
+Select the architecture based on:
+
+- RAM consumption
+- CPU consumption
+- Development complexity
+- Stability
+- Hardware compatibility
+- Visual flexibility
+- Maintainability
+
+Explain the decision using real technical reasoning.
+
+---
+
+# 9. JARVIS DESKTOP DESIGN
+
+Create a custom JARVIS-inspired interface.
+
+Visual direction:
+
+- Dark
+- Futuristic
+- Premium
+- Black
+- Deep navy
+- Cyan
+- Electric blue
+- Clean typography
+- Minimal clutter
+- Lightweight animations
+- High readability
+
+Do NOT create a generic chatbot webpage and call it an operating system.
+
+JARVIS should feel integrated into the desktop.
+
+---
+
+# 10. HOME DASHBOARD
+
+Create a lightweight dashboard displaying:
+
+- Time
+- Date
+- CPU usage
+- RAM usage
+- Storage usage
+- Battery percentage
+- Network state
+- Internet state
+- Local AI Node status
+- Active AI model
+- Cloud AI status
+- Quick-launch applications
+- Recent activity
+
+System-monitoring widgets must update efficiently.
+
+Do not continuously poll hardware at unnecessarily high frequencies.
+
+---
+
+# 11. JARVIS ASSISTANT INTERFACE
+
+Create a central JARVIS interface featuring:
+
+- Text input
+- Conversation view
+- True streaming responses
+- Stop generation
+- Conversation history
+- Memory controls
+- Voice input
+- Voice output
+- Local/cloud indicator
+- Active model indicator
+- Connection indicator
+- Error handling
+- Regenerate
+- New conversation
+
+The interface should clearly show whether a response comes from:
+
+**LOCAL**
+
+**ADVANCED LOCAL**
+
+or
+
+**CLOUD**
+
+---
+
+# 12. APPLICATION LAUNCHER
+
+Provide:
+
+- Search
+- Application categories
+- Favorites
+- Recent applications
+- Keyboard navigation
+- Fast launching
+
+Application discovery should integrate with standard Linux desktop entries wherever practical.
+
+---
+
+# 13. FILE MANAGEMENT
+
+Provide practical file management.
+
+Prefer integration with a lightweight existing Linux file manager rather than writing an entire file manager from scratch unless there is a compelling reason.
+
+JARVIS should eventually understand requests such as:
+
+"Open Downloads."
+
+"Find my PDF."
+
+"Create a folder called Projects."
+
+"Show recent files."
+
+Sensitive/destructive operations must require appropriate confirmation.
+
+---
+
+# 14. SETTINGS
+
+Create settings for:
+
+- Appearance
+- Display
+- Network
+- Bluetooth
+- Audio
+- Power
+- AI
+- Local AI Nodes
+- Cloud providers
+- Memory
+- Privacy
+- Voice
+- Applications
+- Startup
+- Updates
+- System information
+
+---
+
+# 15. JARVIS CORE
+
+Create a lightweight service called:
+
+**JARVIS Core**
+
+This is the control center of AF JARVIS OS.
+
+It should handle:
+
+- Command routing
+- Intent handling
+- System operations
+- AI communication
+- Local AI Node management
+- Cloud escalation
+- Internet/search coordination
+- Memory
+- Voice coordination
+- UI communication
+- Permissions
+- Automation
+- System monitoring
+
+JARVIS Core itself must remain lightweight.
+
+Do NOT load a large language model into the laptop's RAM during normal operation.
+
+---
+
+# 16. JARVIS INTELLIGENCE ARCHITECTURE
+
+Use several layers.
+
+## LEVEL 0 — DETERMINISTIC SYSTEM FUNCTIONS
+
+Use deterministic code whenever practical.
+
+Examples:
+
+"What time is it?"
+
+"Open Firefox."
+
+"Show RAM usage."
+
+"Open Downloads."
+
+"Turn volume down."
+
+"What's my battery percentage?"
+
+Once intent is understood, these operations should not require expensive LLM inference.
+
+## LEVEL 1 — PRIMARY LOCAL AI NODE
+
+This is the DEFAULT AI.
+
+Use it for:
+
+- Normal conversation
+- Basic explanations
+- Basic reasoning
+- Simple coding questions
+- Natural-language understanding
+- Everyday assistance
+- Offline questions
+- Privacy-sensitive AI tasks where appropriate
+
+## LEVEL 2 — ADVANCED LOCAL AI
+
+When stronger local hardware/model is available, JARVIS may use it for harder tasks.
+
+## LEVEL 3 — CLOUD AI
+
+Use cloud intelligence selectively for:
+
+- Difficult reasoning
+- Complex coding
+- Large code analysis
+- Large context
+- Deep research
+- Advanced mathematics
+- Advanced planning
+- Current information
+- Complex multimodal tasks
+- Tasks the local model clearly cannot perform adequately
+
+Cloud AI must not become the default simply because it is smarter.
+
+---
+
+# 17. SEPARATE LOCAL AI DEVICE
+
+This is a CRITICAL architectural requirement.
+
+Normally:
+
+AF JARVIS OS should NOT perform LLM inference on the laptop.
+
+Instead:
+
+User
+↓
+AF JARVIS OS
+↓
+JARVIS Core
+↓
+Local Network
+↓
+JARVIS Local AI Node
+↓
+LLM
+↓
+Response
+↓
+JARVIS Core
+↓
+User
+
+This preserves laptop RAM and CPU.
+
+---
+
+# 18. CURRENT LOCAL AI NODE
+
+My current Local AI Node is:
+
+Samsung Galaxy Tab A7 Lite
+
+Operating system:
+
+Android 14
+
+RAM:
+
+Approximately 3 GB
+
+Architecture:
+
+ARM64
+
+Software:
+
+Termux
+
+llama.cpp
+
+The tablet currently exposes an OpenAI-compatible llama.cpp server over local Wi-Fi.
+
+PRIMARY MODEL:
+
+**SmolLM2 360M Instruct Q6_K**
+
+This model is currently preferred because it is lightweight and reasonably fast.
+
+STORED ADVANCED MODEL:
+
+**Qwen3 1.7B Q4_K_M**
+
+It is smarter but considerably slower on this hardware.
+
+Keep support for it as an optional Advanced Local model.
+
+---
+
+# 19. GENERIC LOCAL AI NODE
+
+Do NOT architect AF JARVIS OS specifically around the Samsung tablet.
+
+Create a generic abstraction called:
+
+# JARVIS Local AI Node
+
+A Local AI Node could be:
+
+- Android tablet
+- Android phone
+- Raspberry Pi where technically practical
+- Mini PC
+- Old laptop
+- Desktop
+- Home server
+- Dedicated AI computer
+- Future edge-AI hardware
+
+The OS must be capable of changing AI hardware without rewriting JARVIS Core.
+
+Use standardized network APIs.
+
+Prefer OpenAI-compatible APIs where practical.
+
+---
+
+# 20. FUTURE RASPBERRY PI SUPPORT
+
+Design for potential Raspberry Pi AI Nodes.
+
+Do not assume every Raspberry Pi can efficiently run every model.
+
+Model suitability depends on:
+
+- Raspberry Pi generation
+- Available RAM
+- CPU
+- Acceleration
+- Quantization
+- Model size
+- Inference engine
+
+The architecture should nevertheless allow a compatible Raspberry Pi to become a Local AI Node without changing JARVIS Core.
+
+---
+
+# 21. LOCAL AI NODE DISCOVERY
+
+Investigate secure discovery using technologies such as:
+
+- mDNS
+- Zeroconf
+- Local hostnames
+- Manual configuration
+
+Potential experience:
+
+Local AI Nodes
+
+JARVIS-TAB
+Online
+SmolLM2 360M
+
+JARVIS-PI
+Online
+Qwen model
+
+JARVIS-SERVER
+Online
+Advanced model
+
+Allow users to select preferred nodes.
+
+Do NOT automatically trust every discovered network device.
+
+Authentication is required.
+
+---
+
+# 22. MULTIPLE LOCAL AI NODES
+
+Design future support for:
+
+JARVIS Core
+├── Tablet
+│   └── Lightweight AI
+│
+├── Raspberry Pi / Mini PC
+│   └── Medium AI
+│
+└── Home Server
+    └── Powerful AI
+
+Future routing could consider:
+
+- Model capability
+- Device speed
+- Availability
+- Load
+- Task complexity
+- Privacy
+- Latency
+
+Full multi-node scheduling is not required for v0.1, but avoid architectural decisions that make it difficult later.
+
+---
+
+# 23. SMART AI ROUTER
+
+Implement an intelligent router.
+
+Examples:
+
+User:
+"What time is it?"
+
+Route:
+Deterministic system function.
+
+User:
+"Explain RAM."
+
+Route:
+Primary Local AI Node.
+
+User:
+"Explain this difficult programming architecture."
+
+Route:
+Evaluate whether advanced local or cloud intelligence would materially improve the answer.
+
+User:
+"Research today's AI developments."
+
+Route:
+Internet search + appropriate intelligence engine.
+
+User:
+"Open Firefox."
+
+Route:
+Validated deterministic system action.
+
+Routing should consider:
+
+- Task complexity
+- Current information requirements
+- Privacy
+- Local model capability
+- Local AI availability
+- Internet availability
+- Cloud availability
+- Cloud quota
+- User settings
+- Expected latency
+
+Keep routing lightweight.
+
+Do NOT use a massive model merely to decide which model should answer.
+
+---
+
+# 24. CLOUD ESCALATION
+
+Cloud AI is a SECONDARY intelligence layer.
+
+For ordinary tasks:
+
+User
+↓
+JARVIS
+↓
+Local AI
+
+For difficult tasks:
+
+User
+↓
+JARVIS
+↓
+Task evaluation
+↓
+Task genuinely benefits from stronger intelligence
+↓
+Cloud allowed?
+↓
+Cloud AI
+
+If cloud fails:
+
+Cloud
+↓
+Quota/error/offline
+↓
+Advanced Local if available
+↓
+Primary Local AI
+
+The system must remain useful even when cloud AI is unavailable.
+
+---
+
+# 25. AI MODES
+
+Implement configurable modes.
+
+## LOCAL ONLY
+
+Never use cloud AI.
+
+## LOCAL FIRST
+
+DEFAULT.
+
+Use Local AI normally.
+
+Escalate genuinely difficult tasks when appropriate and allowed.
+
+## ASK BEFORE CLOUD
+
+When cloud would help, ask:
+
+"This task would benefit from cloud intelligence. Use cloud AI for this request?"
+
+Options:
+
+Use Cloud
+
+Stay Local
+
+## CLOUD PREFERRED
+
+Use cloud AI more readily for complex tasks.
+
+Deterministic system actions remain local regardless.
+
+---
+
+# 26. CLOUD AI PROVIDERS
+
+Research current cloud providers using OFFICIAL documentation.
+
+Potential providers include:
+
+- Google Gemini
+- Groq
+- OpenRouter
+- Other reputable providers
+
+Investigate:
+
+- Intelligence
+- Free allowance
+- Rate limits
+- Token limits
+- Speed
+- Model availability
+- API compatibility
+- Privacy
+- Reliability
+
+IMPORTANT:
+
+Do NOT assume any cloud provider offers permanently unlimited free AI inference.
+
+Do NOT bypass quotas.
+
+Do NOT rotate accounts to evade restrictions.
+
+Do NOT use unauthorized APIs.
+
+Do NOT scrape private endpoints.
+
+Use legitimate documented APIs.
+
+---
+
+# 27. CLOUD PROVIDER FALLBACK
+
+Design a provider abstraction.
+
+Example:
+
+Cloud task
+↓
+Preferred cloud provider
+↓
+Unavailable?
+↓
+Secondary provider
+↓
+Unavailable?
+↓
+Another configured provider
+↓
+Unavailable?
+↓
+Local AI
+
+Provider availability and quotas can change, so do not tightly couple JARVIS to one company.
+
+---
+
+# 28. PRIVACY-AWARE CLOUD PROCESSING
+
+Never silently upload sensitive information.
+
+Examples:
+
+- Passwords
+- API keys
+- Authentication tokens
+- Personal files
+- Private documents
+- Sensitive system data
+- Entire conversation databases
+- Entire memory databases
+
+Send the minimum context required.
+
+Ask permission when sensitive information would need to leave the local network.
+
+---
+
+# 29. INTERNET ACCESS
+
+JARVIS must support internet-connected tasks.
+
+Examples:
+
+"Search the web."
+
+"What's today's weather?"
+
+"Find documentation."
+
+"Research this error."
+
+"Find recent Linux news."
+
+Separate internet retrieval from model knowledge.
+
+Where appropriate:
+
+User
+↓
+Search/Retrieval
+↓
+Relevant information
+↓
+JARVIS
+↓
+Answer with sources
+
+Prefer reputable search methods and documented APIs.
+
+Do not give the language model unrestricted network access.
+
+---
+
+# 30. WEB BROWSER
+
+Include or integrate a practical browser.
+
+Do not build a complete browser engine from scratch.
+
+Use an established browser suitable for the hardware.
+
+JARVIS should be able to launch searches and URLs safely.
+
+---
+
+# 31. SHORT-TERM MEMORY
+
+Implement short-term conversation memory.
+
+Support:
+
+- Recent messages
+- Automatic context trimming
+- Token-aware context management
+- Conversation continuity
+
+Small Local AI Nodes have limited context, so do not simply send unlimited conversation history.
+
+---
+
+# 32. LONG-TERM MEMORY
+
+Implement lightweight local memory.
+
+Prefer SQLite or another efficient local solution.
+
+Potential memory:
+
+- User preferences
+- Projects
+- Important facts
+- Conversation summaries
+- Relevant recurring information
+
+Provide:
+
+- Memory viewer
+- Search
+- Delete
+- Clear
+- Disable
+- Retention controls
+
+Long-term memory remains LOCAL by default.
+
+Never automatically upload the entire database to cloud AI.
+
+---
+
+# 33. MEMORY RETRIEVAL
+
+Do NOT inject every stored memory into every AI request.
+
+Retrieve only relevant information.
+
+Design memory so it remains efficient even as the database grows.
+
+Consider lightweight keyword/search methods before introducing heavyweight embedding infrastructure.
+
+Only add vector databases if there is a clear technical benefit that justifies their resource usage.
+
+---
+
+# 34. TRUE STREAMING
+
+Implement actual token streaming.
+
+Support streaming from:
+
+- llama.cpp
+- Compatible cloud APIs
+
+Do not fake streaming with character-by-character delays when the provider supports actual streaming.
+
+Display tokens as they arrive.
+
+Support:
+
+- Stop
+- Timeout
+- Reconnection
+- Error handling
+
+---
+
+# 35. VOICE ASSISTANT
+
+Implement modular voice capabilities.
+
+Features:
+
+- Push-to-talk
+- Speech-to-text
+- Text-to-speech
+- Optional wake word
+- Voice activity detection
+- Voice settings
+
+Prefer lightweight offline technologies where practical.
+
+Do not continuously upload microphone audio.
+
+Clearly indicate microphone activation.
+
+---
+
+# 36. SYSTEM CONTROL
+
+JARVIS should eventually understand:
+
+"Open Firefox."
+
+"Launch Godot."
+
+"Open Downloads."
+
+"Turn volume down."
+
+"Show CPU usage."
+
+"Show RAM usage."
+
+"What's using the most memory?"
+
+"Create a folder called Projects."
+
+"Restart the computer."
+
+Architecture:
+
+Natural language
+↓
+Intent
+↓
+Validated command
+↓
+Permission check
+↓
+System API
+
+Never execute arbitrary shell commands generated directly by an LLM.
+
+---
+
+# 37. PERMISSION SYSTEM
+
+Categorize actions.
+
+## SAFE
+
+Examples:
+
+Read time
+Read battery
+Open application
+
+Can normally execute immediately.
+
+## MODERATE
+
+Examples:
+
+Create file
+Move file
+Change some settings
+
+May require contextual confirmation.
+
+## SENSITIVE
+
+Examples:
+
+Delete files
+Install packages
+Change security settings
+Restart
+Shutdown
+Modify system files
+
+Require explicit confirmation where appropriate.
+
+---
+
+# 38. OS HARDWARE SUPPORT
+
+AF JARVIS OS should support normal Linux functionality including:
+
+- Wi-Fi
+- Ethernet
+- Bluetooth
+- Audio
+- Microphone
+- USB
+- Keyboard
+- Mouse
+- Touchpad
+- Display
+- Battery
+- Storage
+- External drives
+- Power management
+
+Reuse Linux infrastructure.
+
+---
+
+# 39. SOFTWARE MANAGEMENT
+
+Provide a safe mechanism for installing applications.
+
+Prefer existing Linux package infrastructure.
+
+JARVIS may help search/install packages, but installation actions must be validated.
+
+Do not invent a completely new package ecosystem for v0.1.
+
+---
+
+# 40. SECURITY
+
+Security is mandatory.
+
+Implement:
+
+- Non-root default user
+- Standard Linux permissions
+- Principle of least privilege
+- Protected configuration
+- Secure API-key storage
+- Local AI authentication
+- Input validation
+- Safe command execution
+- Network timeouts
+- Secure logging
+- Permission boundaries
+- Confirmation for sensitive operations
+
+Never grant unrestricted root access to an LLM.
+
+Never put secret API keys into frontend source code.
+
+Never expose the Local AI Node directly to the public internet by default.
+
+---
+
+# 41. LOCAL AI NETWORK SECURITY
+
+Local does not automatically mean trusted.
+
+Protect communication between:
+
+AF JARVIS OS
+↔
+Local AI Node
+
+Use authentication.
+
+Investigate secure transport options where practical.
+
+Do not automatically trust arbitrary discovered devices.
+
+---
+
+# 42. OFFLINE-FIRST DESIGN
+
+AF JARVIS OS must remain useful without internet.
+
+Offline functionality should include:
+
+- Desktop
+- Applications
+- Files
+- Settings
+- System monitoring
+- Deterministic JARVIS commands
+- Local AI Node access over LAN
+- Local memory
+- Local voice where supported
+
+Internet should enhance JARVIS, not be required for basic OS functionality.
+
+---
+
+# 43. FAILURE HANDLING
+
+JARVIS must fail gracefully.
+
+If Local AI Node disappears:
+
+1. Detect failure.
+2. Do not freeze the UI.
+3. Display Local AI Offline.
+4. Continue deterministic commands.
+5. Attempt reasonable reconnection.
+6. Offer another Local AI Node if configured.
+7. Offer cloud intelligence if permitted.
+
+If internet disappears:
+
+Continue local functionality.
+
+If cloud quota expires:
+
+Fall back to local.
+
+If JARVIS Core crashes:
+
+The operating system desktop should remain usable.
+
+JARVIS must enhance the OS rather than becoming a single point of failure.
+
+---
+
+# 44. PERFORMANCE MONITORING
+
+Measure:
+
+- Idle RAM
+- CPU usage
+- Boot time
+- Login time
+- JARVIS Core RAM
+- Desktop RAM
+- AI latency
+- Local network latency
+- Cloud latency
+- Application launch time where practical
+
+Never invent results.
+
+---
+
+# 45. BATTERY EFFICIENCY
+
+Because this is a laptop, optimize battery usage.
+
+Avoid:
+
+- Constant high-frequency polling
+- Unnecessary animations
+- Permanent high CPU usage
+- Wasteful networking
+- Unnecessary wakeups
+
+JARVIS should be nearly idle when the user is not interacting with it.
+
+---
+
+# 46. BOOT PROCESS
+
+Create a branded but lightweight boot experience.
+
+Avoid adding expensive animation merely for appearance.
+
+AF JARVIS OS should boot quickly into the login/desktop environment.
+
+---
+
+# 47. LOGIN
+
+Provide standard secure Linux user authentication.
+
+JARVIS should start after login rather than requiring privileged execution.
+
+---
+
+# 48. BUILD SYSTEM
+
+Create a reproducible OS build process.
+
+Deliver:
+
+- Source code
+- Repository structure
+- Build scripts
+- Configuration
+- Dependency documentation
+- Installation instructions
+- Development instructions
+- Testing scripts
+- README
+- Troubleshooting guide
+
+Eventually produce:
+
+**AF-JARVIS-OS-v0.1-alpha.iso**
+
+when technically possible.
+
+---
+
+# 49. ISO CREATION
+
+Use established Linux image-building tools.
+
+Do not simply rename archives as ISO files.
+
+The ISO should eventually support:
+
+- Boot
+- Live environment where appropriate
+- Installation
+- JARVIS desktop
+- JARVIS Core
+
+If the current development environment cannot actually build an ISO, state the exact limitation.
+
+Then create a reproducible build process that can generate it on supported hardware or CI.
+
+---
+
+# 50. VIRTUAL MACHINE TESTING
+
+Test AF JARVIS OS in QEMU or another appropriate virtualization environment before recommending real installation.
+
+Test:
+
+- Boot
+- Login
+- Desktop
+- Networking
+- JARVIS startup
+- Local AI connection
+- Cloud escalation
+- Applications
+- File management
+- Shutdown
+
+Never claim something was tested if it was not actually tested.
+
+---
+
+# 51. REAL HARDWARE SAFETY
+
+Do NOT immediately replace Windows 11.
+
+Development progression should be:
+
+Source
+↓
+Build
+↓
+Virtual machine
+↓
+Fix problems
+↓
+Bootable USB/live testing
+↓
+Hardware verification
+↓
+Only then consider installation
+
+Avoid destructive disk operations without explicit approval.
+
+---
+
+# 52. PROJECT STRUCTURE
+
+Create a clean maintainable repository.
+
+Possible conceptual structure:
+
+af-jarvis-os/
+├── build/
+├── distro/
+├── desktop/
+├── jarvis-core/
+├── jarvis-ui/
+├── ai/
+│   ├── router/
+│   ├── local/
+│   └── cloud/
+├── memory/
+├── voice/
+├── system/
+├── network/
+├── security/
+├── config/
+├── scripts/
+├── tests/
+├── docs/
+└── README.md
+
+Adjust this structure when better engineering choices become apparent.
+
+---
+
+# 53. DEVELOPMENT PHASES
+
+Proceed in phases.
+
+## PHASE 1 — RESEARCH
+
+Research:
+
+- Linux base
+- Window manager
+- UI toolkit
+- ISO tooling
+- Voice stack
+- Local AI communication
+- Cloud providers
+- Hardware compatibility
+
+Use current authoritative sources when necessary.
+
+## PHASE 2 — ARCHITECTURE
+
+Define:
+
+- OS architecture
+- JARVIS Core
+- AI router
+- Local AI protocol
+- Memory
+- Security
+- UI architecture
+
+## PHASE 3 — JARVIS CORE
+
+Implement the lightweight service.
+
+## PHASE 4 — DESKTOP PROTOTYPE
+
+Create the functional desktop.
+
+## PHASE 5 — LOCAL AI
+
+Integrate the external Local AI Node.
+
+## PHASE 6 — STREAMING + MEMORY
+
+Implement real streaming and memory.
+
+## PHASE 7 — CLOUD INTELLIGENCE
+
+Implement selective cloud escalation and provider fallback.
+
+## PHASE 8 — INTERNET
+
+Implement search/retrieval.
+
+## PHASE 9 — SYSTEM INTEGRATION
+
+Implement validated system commands.
+
+## PHASE 10 — VOICE
+
+Implement lightweight voice capabilities.
+
+## PHASE 11 — DISTRIBUTION BUILD
+
+Integrate components into the Linux distribution.
+
+## PHASE 12 — ISO
+
+Generate bootable image.
+
+## PHASE 13 — TESTING
+
+Use VM testing.
+
+## PHASE 14 — OPTIMIZATION
+
+Reduce:
+
+- RAM
+- CPU
+- boot time
+- unnecessary services
+
+## PHASE 15 — RELEASE
+
+Produce:
+
+**AF JARVIS OS v0.1 Alpha**
+
+---
+
+# 54. DEVELOPMENT BEHAVIOR
+
+This is extremely important.
+
+Do NOT respond to this prompt with only:
+
+- A roadmap
+- Suggestions
+- Architecture diagrams
+- Tutorials
+- Mockups
+
+You are expected to actively work on the project.
+
+Create files.
+
+Write code.
+
+Run tests.
+
+Inspect failures.
+
+Fix errors.
+
+Continue development.
+
+Use the available working environment and tools.
+
+Do not repeatedly ask me to perform routine technical work that you can perform yourself.
+
+Make reasonable engineering decisions independently.
+
+---
+
+# 55. WHEN TO ASK ME
+
+Do not constantly ask questions about minor technical choices.
+
+Choose sensible defaults yourself.
+
+Ask me when:
+
+- An irreversible action is required
+- Data could be destroyed
+- Credentials are required
+- Hardware access requires my participation
+- Multiple choices fundamentally change the product
+- You genuinely cannot continue without information
+
+Otherwise continue working.
+
+---
+
+# 56. HONESTY REQUIREMENT
+
+Never pretend something works.
+
+Clearly distinguish:
+
+IMPLEMENTED
+
+TESTED
+
+PARTIALLY IMPLEMENTED
+
+PLANNED
+
+FAILED
+
+UNTESTED
+
+If a command fails, investigate it.
+
+If a feature cannot be completed, explain why and preserve the work so development can continue.
+
+---
+
+# 57. PHASE REPORTING
+
+At the end of each major phase report:
+
+1. What was implemented
+2. What files were created
+3. What was tested
+4. What works
+5. What failed
+6. Current RAM/resource measurements where available
+7. What remains
+8. Next task
+
+Then continue development unless user input is genuinely required.
+
+---
+
+# 58. FUTURE HARDWARE SCALABILITY
+
+The architecture should scale from:
+
+CURRENT:
+
+HP 250 G7
++
+Tab A7 Lite Local AI Node
+
+to:
+
+FUTURE:
+
+AF JARVIS OS computer
++
+Raspberry Pi / Mini PC AI Node
+
+to:
+
+LATER:
+
+AF JARVIS OS
++
+Dedicated powerful local AI server
+
+without rewriting the entire operating system.
+
+Only configuration, capabilities, and model selection should need to change.
+
+---
+
+# 59. FUTURE LOCAL INTELLIGENCE
+
+As local hardware improves, cloud dependence should be capable of decreasing.
+
+Today:
+
+SmolLM2
++
+occasional cloud intelligence
+
+Future:
+
+Stronger local model
++
+less cloud
+
+Long term:
+
+Powerful local AI server
++
+cloud only for specialized tasks
+
+Design for this evolution.
+
+---
+
+# 60. CRITICAL ARCHITECTURE SUMMARY
+
+The intended architecture is:
+
+                         USER
+                           │
+                           ▼
+                    AF JARVIS OS
+                     HP 250 G7
+                           │
+                      JARVIS CORE
+                     lightweight
+                           │
+       ┌───────────────────┼────────────────────┐
+       │                   │                    │
+       ▼                   ▼                    ▼
+ SYSTEM FUNCTIONS       INTERNET             AI ROUTER
+       │                                        │
+       │                         ┌──────────────┴──────────────┐
+       │                         │                             │
+       │                         ▼                             ▼
+       │                  LOCAL AI NODE                    CLOUD AI
+       │                     PRIMARY                       OPTIONAL
+       │                         │
+       │             ┌───────────┴────────────┐
+       │             │                        │
+       │          CURRENT                   FUTURE
+       │       Tab A7 Lite             Raspberry Pi /
+       │       llama.cpp                Mini PC /
+       │       SmolLM2 360M              AI Server
+       │
+       └────────── Deterministic OS control
+
+The laptop should NOT normally spend its limited RAM running the language model.
+
+Its job is to provide:
+
+- Operating system
+- Desktop
+- Applications
+- JARVIS Core
+- Routing
+- Memory
+- Voice coordination
+- System control
+- Internet coordination
+
+The separate Local AI Node performs normal AI inference.
+
+Cloud intelligence handles appropriate difficult tasks.
+
+---
+
+# 61. RESOURCE PHILOSOPHY
+
+AF JARVIS OS should demonstrate:
+
+**An AI-powered operating system does not need to be a resource-heavy operating system.**
+
+Avoid adding something simply because modern computers can handle it.
+
+This computer has 4 GB RAM.
+
+Design accordingly.
+
+A component consuming 200 MB unnecessarily is a serious architectural issue.
+
+A component consuming 20 MB while accomplishing the same task is preferable.
+
+But never sacrifice:
+
+- Security
+- Stability
+- Data integrity
+- Essential functionality
+
+merely to achieve a lower benchmark.
+
+---
+
+# 62. PRIORITY ORDER
+
+When engineering tradeoffs occur, generally prioritize:
+
+1. Reliability
+2. Security
+3. Low RAM usage
+4. Functional usefulness
+5. Performance
+6. Maintainability
+7. Battery efficiency
+8. Visual quality
+9. Fancy effects
+
+The UI should still look premium and futuristic, but appearance must not destroy efficiency.
+
+---
+
+# 63. FINAL DELIVERABLE
+
+The target is:
+
+# AF JARVIS OS v0.1 Alpha
+
+Eventually deliver:
+
+- Bootable Linux ISO
+- Lightweight custom desktop
+- JARVIS Core
+- Separate Local AI Node support
+- Tab A7 Lite compatibility
+- Future Raspberry Pi/mini-PC compatibility
+- Local-first intelligence
+- Smart cloud escalation
+- Internet/search integration
+- Short-term memory
+- Long-term local memory
+- True AI streaming
+- System monitoring
+- Validated system control
+- Application launcher
+- File management
+- Voice capabilities where practical
+- Security controls
+- Offline functionality
+- Source code
+- Build scripts
+- Tests
+- Documentation
+
+The project should remain completely maintainable after this development session ends.
+
+---
+
+# 64. START NOW
+
+Begin immediately.
+
+First perform the necessary technical research using current authoritative sources.
+
+Choose the Linux foundation, lightweight desktop architecture, UI technology, JARVIS Core architecture, Local AI Node protocol, memory architecture, and build system.
+
+Pay particular attention to ACTUAL RAM consumption.
+
+Then create the real project structure.
+
+Implement the first working milestone.
+
+Run it.
+
+Test it.
+
+Fix problems.
+
+Continue into subsequent phases as far as the available environment allows.
+
+Do not stop after giving me a plan.
+
+Do not give me only code snippets when you can create the actual project files.
+
+Do not create a fake OS mockup.
+
+Build a maintainable foundation capable of becoming the real AF JARVIS OS.
+
+Remember throughout development:
+
+**ULTRA-LIGHTWEIGHT OS.**
+
+**LOWEST PRACTICAL RAM USAGE.**
+
+**LIGHTWEIGHT JARVIS CORE.**
+
+**SEPARATE LOCAL AI NODE.**
+
+**LOCAL AI IS PRIMARY.**
+
+**CLOUD AI IS OPTIONAL EXTRA INTELLIGENCE FOR DIFFICULT TASKS.**
+
+**THE OS MUST REMAIN USEFUL OFFLINE.**
+
+**SECURITY AND RELIABILITY MUST NEVER BE SACRIFICED FOR APPEARANCE.**
+
+Now begin building:
+
+# AF JARVIS OS.

@@ -1,0 +1,18 @@
+{
+  "python": "Debian/Ubuntu system Python 3.12 with extracted PyGObject/GTK3 dependencies",
+  "imports_passed": [
+    "jarvis.cli",
+    "jarvis.config",
+    "jarvis.core",
+    "jarvis.desktop",
+    "jarvis.ipc",
+    "jarvis.memory",
+    "jarvis.providers",
+    "jarvis.router",
+    "jarvis.search",
+    "jarvis.server",
+    "jarvis.system",
+    "jarvis.voice"
+  ],
+  "note": "No real Vosk/audio, Debian package solve or boot implied."
+}

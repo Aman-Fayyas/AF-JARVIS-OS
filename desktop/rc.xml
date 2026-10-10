@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <theme><name>Clearlooks</name><titleLayout>NLIMC</titleLayout></theme>
+  <desktops><number>2</number><firstdesk>1</firstdesk><names><name>JARVIS</name><name>Work</name></names></desktops>
+  <keyboard>
+    <keybind key="A-Tab"><action name="NextWindow"/></keybind>
+    <keybind key="A-F4"><action name="Close"/></keybind>
+    <keybind key="W-Return"><action name="Execute"><command>xterm</command></action></keybind>
+    <keybind key="W-e"><action name="Execute"><command>pcmanfm</command></action></keybind>
+    <keybind key="W-j"><action name="Execute"><command>af-jarvis-desktop</command></action></keybind>
+    <keybind key="W-Escape"><action name="Execute"><command>i3lock --color=080f1c</command></action></keybind>
+  </keyboard>
+  <mouse>
+    <context name="Titlebar"><mousebind button="Left" action="Drag"><action name="Move"/></mousebind><mousebind button="Left" action="DoubleClick"><action name="ToggleMaximize"/></mousebind></context>
+    <context name="Root"><mousebind button="Right" action="Press"><action name="ShowMenu"><menu>root-menu</menu></action></mousebind></context>
+  </mouse>
+  <applications><application name="*"><decor>yes</decor></application></applications>
+</openbox_config>
