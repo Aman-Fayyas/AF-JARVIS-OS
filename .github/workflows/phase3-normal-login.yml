@@ -1,0 +1,98 @@
+name: AF JARVIS Phase 3 - Normal Login QEMU
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - minimal-hardware-validation
+
+permissions:
+  contents: read
+
+jobs:
+  normal-login:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out validation branch
+        uses: actions/checkout@v4
+
+      - name: Install host and display-test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debootstrap rsync qemu-system-x86 ovmf socat xvfb xdotool imagemagick tesseract-ocr
+
+      - name: Create isolated Debian 13 builder
+        run: |
+          sudo mkdir -p /opt/af-jarvis-debian
+          sudo debootstrap --arch=amd64 trixie /opt/af-jarvis-debian http://deb.debian.org/debian
+          sudo mount --bind /dev /opt/af-jarvis-debian/dev
+          sudo mount --bind /dev/pts /opt/af-jarvis-debian/dev/pts
+          sudo mount -t proc proc /opt/af-jarvis-debian/proc
+          sudo mount -t sysfs sys /opt/af-jarvis-debian/sys
+          sudo cp /etc/resolv.conf /opt/af-jarvis-debian/etc/resolv.conf
+          sudo mkdir -p /opt/af-jarvis-debian/work/AF-JARVIS-OS
+          sudo rsync -a --delete --exclude .git ./ /opt/af-jarvis-debian/work/AF-JARVIS-OS/
+          sudo tee /opt/af-jarvis-debian/etc/apt/sources.list >/dev/null <<'EOF'
+          deb http://deb.debian.org/debian trixie main contrib non-free-firmware
+          deb http://deb.debian.org/debian trixie-updates main contrib non-free-firmware
+          deb http://security.debian.org/debian-security trixie-security main contrib non-free-firmware
+          EOF
+
+      - name: Install image build dependencies
+        run: |
+          sudo chroot /opt/af-jarvis-debian /bin/bash -lc 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y live-build debootstrap squashfs-tools xorriso isolinux syslinux-common grub-pc-bin grub-efi-amd64-bin mtools dosfstools rsync ripgrep openssl python3'
+
+      - name: Build ISO with standard password login (no autologin)
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIVE_PASSWORD="$(openssl rand -hex 16)"
+          echo "::add-mask::$LIVE_PASSWORD"
+          echo "AF_JARVIS_CI_PASSWORD=$LIVE_PASSWORD" >> "$GITHUB_ENV"
+          openssl passwd -6 "$LIVE_PASSWORD" > "$RUNNER_TEMP/af-jarvis-ci-password.hash"
+          sudo install -m 600 "$RUNNER_TEMP/af-jarvis-ci-password.hash" /opt/af-jarvis-debian/tmp/af-jarvis-ci-password.hash
+          sudo chroot /opt/af-jarvis-debian /bin/bash -lc '
+            set -euo pipefail
+            cd /work/AF-JARVIS-OS
+            # CI-only: hide the account list to make the normal username/password greeter deterministic.
+            # No autologin keys are added; this is a disposable image and does not change the repository.
+            printf "%s\\n" "greeter-hide-users=true" >> distro/includes/etc/lightdm/lightdm.conf.d/50-jarvis.conf
+            export JARVIS_LIVE_PASSWORD_HASH_FILE=/tmp/af-jarvis-ci-password.hash
+            bash scripts/build-iso.sh --build /work/AF-JARVIS-OS/build/qemu-normal-login
+            rm -f "$JARVIS_LIVE_PASSWORD_HASH_FILE"
+          '
+          sudo cp /opt/af-jarvis-debian/work/AF-JARVIS-OS/build/qemu-normal-login/AF-JARVIS-OS-v0.1-alpha.iso .
+          sudo chown "$USER:$USER" AF-JARVIS-OS-v0.1-alpha.iso
+          sha256sum AF-JARVIS-OS-v0.1-alpha.iso | tee AF-JARVIS-normal-login-iso.sha256
+          rm -f "$RUNNER_TEMP/af-jarvis-ci-password.hash"
+
+      - name: Validate BIOS normal login
+        run: |
+          set -euo pipefail
+          xvfb-run -a -s "-screen 0 1280x800x24" bash scripts/ci-normal-login-qemu.sh bios AF-JARVIS-OS-v0.1-alpha.iso "$AF_JARVIS_CI_PASSWORD" "$RUNNER_TEMP/af-jarvis-bios"
+
+      - name: Validate UEFI normal login
+        run: |
+          set -euo pipefail
+          xvfb-run -a -s "-screen 0 1280x800x24" bash scripts/ci-normal-login-qemu.sh uefi AF-JARVIS-OS-v0.1-alpha.iso "$AF_JARVIS_CI_PASSWORD" "$RUNNER_TEMP/af-jarvis-uefi"
+
+      - name: Upload normal-login evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AF-JARVIS-Phase3-normal-login-evidence
+          path: |
+            ${{ runner.temp }}/af-jarvis-bios/
+            ${{ runner.temp }}/af-jarvis-uefi/
+            AF-JARVIS-normal-login-iso.sha256
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Cleanup builder mounts
+        if: always()
+        run: |
+          sudo umount -l /opt/af-jarvis-debian/dev/pts 2>/dev/null || true
+          sudo umount -l /opt/af-jarvis-debian/dev 2>/dev/null || true
+          sudo umount -l /opt/af-jarvis-debian/proc 2>/dev/null || true
+          sudo umount -l /opt/af-jarvis-debian/sys 2>/dev/null || true
