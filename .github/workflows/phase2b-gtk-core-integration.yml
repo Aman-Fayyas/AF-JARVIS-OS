@@ -1,0 +1,57 @@
+name: AF JARVIS Phase 2B - GTK and Core Integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - minimal-hardware-validation
+
+permissions:
+  contents: read
+
+jobs:
+  gtk-core-integration:
+    name: Native GTK desktop and Core integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out experimental branch
+        uses: actions/checkout@v4
+
+      - name: Install GTK and virtual-display dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-gi gir1.2-gtk-3.0 xvfb dbus-x11
+
+      - name: Record test environment
+        run: |
+          /usr/bin/python3 --version
+          uname -a
+          dpkg-query -W python3-gi gir1.2-gtk-3.0 xvfb
+
+      - name: Run GTK and Core integration smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p phase2b-results
+          dbus-run-session -- xvfb-run -a /usr/bin/python3 -m tests.desktop_smoke 2>&1 | tee phase2b-results/gtk-core-integration.log
+
+      - name: Collect test evidence
+        if: always()
+        run: |
+          mkdir -p phase2b-results
+          if [ -f docs/desktop-smoke-results.json ]; then
+            cp docs/desktop-smoke-results.json phase2b-results/
+          fi
+          if [ -f docs/desktop-tested.png ]; then
+            cp docs/desktop-tested.png phase2b-results/
+          fi
+
+      - name: Upload Phase 2B evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AF-JARVIS-Phase-2B-GTK-Core-Integration
+          path: phase2b-results/
+          if-no-files-found: warn
+          retention-days: 14
