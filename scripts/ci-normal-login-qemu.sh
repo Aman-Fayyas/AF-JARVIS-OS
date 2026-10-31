@@ -47,21 +47,37 @@ for _ in $(seq 1 45); do
 done
 [[ "$BOOT_MENU_SEEN" == 1 ]] || { echo "Firmware boot menu was not detected." >&2; cat "$OUT/$MODE-boot-menu-ocr.txt" >&2 || true; exit 1; }
 printf 'sendkey ret\n' | socat - UNIX-CONNECT:"$MONITOR"
-sleep 90
-import -window "$WINDOW" "$OUT/$MODE-login-greeter.png"
-# CI image hides the user list so the standard username/password prompt is deterministic.
-xdotool type --clearmodifiers --delay 80 jarvis
+# Wait for the actual LightDM greeter. A fixed sleep can capture the boot
+# console and send credentials before the graphical login dialog exists.
+GREETER_SEEN=0
+for _ in $(seq 1 90); do
+  kill -0 "$QEMU_PID"
+  import -window "$WINDOW" "$OUT/$MODE-login-greeter.png"
+  convert "$OUT/$MODE-login-greeter.png" -gravity North -chop 0x30 "$OUT/$MODE-login-content.png"
+  tesseract "$OUT/$MODE-login-content.png" stdout 2>/dev/null >"$OUT/$MODE-greeter-ocr.txt" || true
+  if grep -Eqi 'Enter your password|Log In|Username' "$OUT/$MODE-greeter-ocr.txt"; then
+    GREETER_SEEN=1
+    break
+  fi
+  sleep 3
+done
+[[ "$GREETER_SEEN" == 1 ]] || { echo "LightDM login greeter was not detected." >&2; cat "$OUT/$MODE-greeter-ocr.txt" >&2 || true; exit 1; }
+# The CI-only greeter hides the user list. Focus the username field explicitly,
+# then submit the temporary CI password; never use autologin.
+xdotool mousemove --window "$WINDOW" 690 360 click 1
+xdotool type --clearmodifiers --delay 100 jarvis
 xdotool key Return
-sleep 3
-xdotool type --clearmodifiers --delay 35 "$PASSWORD"
+sleep 2
+xdotool type --clearmodifiers --delay 45 "$PASSWORD"
 xdotool key Return
-# Require visible desktop evidence, not merely a QEMU process that stayed alive.
+# Require AF JARVIS text inside the guest display, excluding the QEMU title bar.
 for _ in $(seq 1 90); do
   kill -0 "$QEMU_PID"
   import -window "$WINDOW" "$OUT/$MODE-after-login.png"
-  tesseract "$OUT/$MODE-after-login.png" stdout 2>/dev/null >"$OUT/$MODE-screen-ocr.txt" || true
+  convert "$OUT/$MODE-after-login.png" -gravity North -chop 0x30 "$OUT/$MODE-screen-content.png"
+  tesseract "$OUT/$MODE-screen-content.png" stdout 2>/dev/null >"$OUT/$MODE-screen-ocr.txt" || true
   if grep -Eqi 'AF[[:space:]]+JARVIS|JARVIS|Dashboard' "$OUT/$MODE-screen-ocr.txt"; then
-    printf '{"mode":"%s","login":"desktop-visible","qemu_pid":%s}\n' "$MODE" "$QEMU_PID" >"$OUT/$MODE-normal-login-result.json"
+    printf '{"mode":"%s","login":"desktop-visible","evidence":"guest-display-ocr","qemu_pid":%s}\n' "$MODE" "$QEMU_PID" >"$OUT/$MODE-normal-login-result.json"
     exit 0
   fi
   sleep 5
