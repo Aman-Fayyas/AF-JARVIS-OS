@@ -32,6 +32,20 @@ for _ in $(seq 1 90); do
 done
 [[ -n "$WINDOW" ]] || { echo "QEMU display window did not appear" >&2; exit 1; }
 xdotool windowfocus --sync "$WINDOW"
+# UEFI firmware can expose its boot menu later than the SDL window. Wait until
+# the actual menu is visible before sending Enter; an early key is silently lost.
+BOOT_MENU_SEEN=0
+for _ in $(seq 1 45); do
+  import -window "$WINDOW" "$OUT/$MODE-boot-menu.png"
+  tesseract "$OUT/$MODE-boot-menu.png" stdout 2>/dev/null >"$OUT/$MODE-boot-menu-ocr.txt" || true
+  if grep -Eqi 'enter:[[:space:]]*boot|Live system|Start installer' "$OUT/$MODE-boot-menu-ocr.txt"; then
+    BOOT_MENU_SEEN=1
+    break
+  fi
+  kill -0 "$QEMU_PID"
+  sleep 2
+done
+[[ "$BOOT_MENU_SEEN" == 1 ]] || { echo "Firmware boot menu was not detected." >&2; cat "$OUT/$MODE-boot-menu-ocr.txt" >&2 || true; exit 1; }
 printf 'sendkey ret\n' | socat - UNIX-CONNECT:"$MONITOR"
 sleep 90
 import -window "$WINDOW" "$OUT/$MODE-login-greeter.png"
