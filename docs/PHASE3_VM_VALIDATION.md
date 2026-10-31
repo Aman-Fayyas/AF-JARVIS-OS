@@ -1,15 +1,28 @@
 # Phase 3 — Full-system VM validation
 
-Status: IN PROGRESS
+Status: IN PROGRESS — automated ISO build and BIOS/UEFI desktop boot gate passed; interactive validation gates remain open.
 Branch: minimal-hardware-validation
 Scope: disposable QEMU guest only; no physical disks or installer target.
+
+## Latest automated evidence — 2026-10-31
+
+<badge>Not part of the source file</badge>
+
+- QEMU Boot Test workflow completed successfully on commit `19420f883fd5433679b2748f1bfcdd39cc37e431`.
+- Workflow run: https://github.com/Aman-Fayyas/AF-JARVIS-OS/actions/runs/41212431001
+- Artifact: https://github.com/Aman-Fayyas/AF-JARVIS-OS/actions/runs/41212431001/artifacts/13046683357
+- The workflow built the ISO and completed its BIOS and UEFI QEMU boot steps. Both guests remained running through the 240-second observation window, and boot/menu/desktop screenshots and non-empty logs were uploaded.
+- Important limitation: the workflow modifies its disposable CI image to enable LightDM autologin. It therefore does not verify the normal greeter, correct/incorrect password handling, or a normal user login.
+- The workflow does not assert Core health/recovery, test the broader desktop checklist, or collect the whole-system idle RAM JSON.
+
+This is a successful automated build-and-boot milestone, not completion of all Phase 3 exit criteria below.
 
 ## Evidence entering Phase 3
 
 - Phase 2B GTK/Core integration workflow passed on commit 6e3e7adbb7244068f9b84041823de52eac72362.
 - BIOS and UEFI QEMU screenshots show the desktop rendered.
 - The existing QEMU workflow appends LightDM autologin to its disposable CI chroot. Therefore those screenshots do not validate the normal login screen or password handling.
-- Existing QEMU logs were empty. Screenshots are useful visual evidence, not complete boot logs.
+- Earlier QEMU logs supplied for review were empty; the latest run above now provides non-empty logs.
 - Phase 2B used a test-fixture AI response. It did not validate a real AI provider or local tablet node.
 - No whole-OS idle RAM measurement has been recorded.
 
