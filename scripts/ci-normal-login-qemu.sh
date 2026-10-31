@@ -32,7 +32,7 @@ for _ in $(seq 1 90); do
 done
 [[ -n "$WINDOW" ]] || { echo "QEMU display window did not appear" >&2; exit 1; }
 xdotool windowfocus --sync "$WINDOW"
-printf 'sendkey ret\\n' | socat - UNIX-CONNECT:"$MONITOR"
+printf 'sendkey ret\n' | socat - UNIX-CONNECT:"$MONITOR"
 sleep 90
 import -window "$WINDOW" "$OUT/$MODE-login-greeter.png"
 # CI image hides the user list so the standard username/password prompt is deterministic.
