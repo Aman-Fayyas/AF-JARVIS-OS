@@ -1,0 +1,68 @@
+#!/usr/bin/python3
+"""Collect read-only Phase 3 diagnostics from a logged-in AF JARVIS guest."""
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import time
+
+def run(args):
+    try:
+        p = subprocess.run(args, text=True, capture_output=True, timeout=8)
+        return {"returncode": p.returncode, "stdout": p.stdout.strip()[-6000:], "stderr": p.stderr.strip()[-2000:]}
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"error": str(exc)}
+
+mem = {}
+for line in Path("/proc/meminfo").read_text().splitlines():
+    key, value = line.split(":", 1)
+    mem[key] = int(value.split()[0]) // 1024
+
+processes = []
+for proc in Path("/proc").iterdir():
+    if not proc.name.isdigit():
+        continue
+    try:
+        name = (proc / "comm").read_text().strip()
+        pss = None
+        for line in (proc / "smaps_rollup").read_text().splitlines():
+            if line.startswith("Pss:"):
+                pss = round(int(line.split()[1]) / 1024, 2)
+                break
+        processes.append({"pid": int(proc.name), "name": name, "pss_mib": pss})
+    except (OSError, ValueError, IndexError):
+        pass
+
+commands = {
+    "user_service_status": ["systemctl", "--user", "status", "jarvis-core.service", "--no-pager"],
+    "user_failed_units": ["systemctl", "--user", "--failed", "--no-pager"],
+    "system_failed_units": ["systemctl", "--failed", "--no-pager"],
+    "network_devices": ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE", "device"],
+    "audio_outputs": ["pactl", "list", "short", "sinks"],
+    "audio_inputs": ["pactl", "list", "short", "sources"],
+    "display": ["xrandr", "--current"],
+    "boot_timing": ["systemd-analyze"],
+    "core_journal": ["journalctl", "--user", "-u", "jarvis-core.service", "-b", "--no-pager", "-n", "100"],
+}
+results = {name: run(args) for name, args in commands.items()}
+apps = ["pcmanfm", "firefox-esr", "openbox", "tint2", "lightdm"]
+report = {
+    "schema": "af-jarvis-phase3-guest-check-v1",
+    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    "scope": "read-only diagnostics from a manually logged-in guest; does not prove interactive tests",
+    "identity": {"uid": os.getuid(), "user": os.environ.get("USER"), "display": os.environ.get("DISPLAY")},
+    "boot_marker": Path("/etc/issue").read_text(errors="replace").startswith("AF JARVIS OS"),
+    "memory_mib": {"mem_total": mem.get("MemTotal"), "mem_available": mem.get("MemAvailable"),
+                   "used_estimate": mem.get("MemTotal", 0) - mem.get("MemAvailable", 0),
+                   "swap_total": mem.get("SwapTotal"), "swap_free": mem.get("SwapFree")},
+    "processes_by_pss": sorted(processes, key=lambda p: p["pss_mib"] or 0, reverse=True)[:30],
+    "applications_present": {app: shutil.which(app) is not None for app in apps},
+    "checks": results,
+    "manual_checks_still_required": [
+        "wrong-password rejection", "screen lock and password unlock", "suspend/resume",
+        "network disconnect/reconnect behavior", "audio playback and microphone capture",
+        "file manager interactive launch", "guest shutdown"
+    ],
+}
+print(json.dumps(report, indent=2))
