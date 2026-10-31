@@ -1,0 +1,47 @@
+name: AF JARVIS Functional Smoke Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - minimal-hardware-validation
+
+permissions:
+  contents: read
+
+jobs:
+  functional-smoke-tests:
+    name: Core, memory, routing and build-tree checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out experimental branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Record test environment
+        run: |
+          python --version
+          uname -a
+          df -h
+          free -h
+
+      - name: Run existing project validation suite
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p test-results
+          bash scripts/check.sh 2>&1 | tee test-results/functional-smoke-tests.log
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AF-JARVIS-functional-smoke-test-report
+          path: test-results/functional-smoke-tests.log
+          if-no-files-found: warn
+          retention-days: 7
