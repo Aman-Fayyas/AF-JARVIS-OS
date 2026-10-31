@@ -55,7 +55,7 @@ The current GitHub QEMU workflow is not evidence for these password/login checks
 After a normal login, wait at least 60 seconds and run:
 
 ```bash
-sudo /usr/local/bin/af-jarvis-phase3-check > phase3-guest-report.json
+python3 /usr/local/bin/af-jarvis-phase3-check > phase3-guest-report.json
 ```
 
 The command emits a JSON report with identity, boot marker, whole-system memory, top process PSS, Core service status/journal, failed units, network device state, audio device listings, display information, boot timing and application presence. It is diagnostic evidence, not a substitute for interactive checks. Retain the complete JSON privately with the VM mode, QEMU version and ISO checksum.
