@@ -6,38 +6,26 @@ Scope: disposable QEMU guest only; no physical disks or installer target.
 
 ## Latest automated evidence — 2026-10-31
 
-<badge>Not part of the source file</badge>
-
 - QEMU Boot Test workflow completed successfully on commit `19420f883fd5433679b2748f1bfcdd39cc37e431`.
 - Workflow run: https://github.com/Aman-Fayyas/AF-JARVIS-OS/actions/runs/41212431001
 - Artifact: https://github.com/Aman-Fayyas/AF-JARVIS-OS/actions/runs/41212431001/artifacts/13046683357
-- The workflow built the ISO and completed its BIOS and UEFI QEMU boot steps. Both guests remained running through the 240-second observation window, and boot/menu/desktop screenshots and non-empty logs were uploaded.
-- Important limitation: the workflow modifies its disposable CI image to enable LightDM autologin. It therefore does not verify the normal greeter, correct/incorrect password handling, or a normal user login.
-- The workflow does not assert Core health/recovery, test the broader desktop checklist, or collect the whole-system idle RAM JSON.
+- The workflow built the ISO and completed BIOS and UEFI QEMU boot steps. Both guests remained running through the 240-second observation window, and screenshots and logs were uploaded.
+- Critical limitation: this workflow enables LightDM autologin in its disposable CI image. It does not test the normal greeter or password authentication.
+- It does not assert Core health/recovery, desktop behavior, or collect whole-system idle RAM.
 
-This is a successful automated build-and-boot milestone, not completion of all Phase 3 exit criteria below.
-
-## Evidence entering Phase 3
-
-- Phase 2B GTK/Core integration workflow passed on commit 6e3e7adbb7244068f9b84041823de52eac72362.
-- BIOS and UEFI QEMU screenshots show the desktop rendered.
-- The existing QEMU workflow appends LightDM autologin to its disposable CI chroot. Therefore those screenshots do not validate the normal login screen or password handling.
-- Earlier QEMU logs supplied for review were empty; the latest run above now provides non-empty logs.
-- Phase 2B used a test-fixture AI response. It did not validate a real AI provider or local tablet node.
-- No whole-OS idle RAM measurement has been recorded.
+This is a successful automated build-and-boot milestone, not completion of all Phase 3 exit criteria.
 
 ## Safety boundary
 
-- Never attach the host's physical disk to QEMU.
-- Never run the installer against a host disk.
-- Use a newly created disposable virtual disk only if installer testing is explicitly added later.
-- Do not change Windows partitions, BitLocker, Secure Boot or firmware settings for this phase.
-- Do not publish a live-image password or its hash. The hash is embedded in the ISO; keep the ISO private.
-- Do not mark a check passed without a dated observation, log or screenshot.
+- Never attach the host's physical disk to QEMU or run an installer against a host disk.
+- Do not change Windows partitions, BitLocker, Secure Boot or firmware settings.
+- Do not publish a live-image password/hash or upload a password-bearing ISO publicly.
+- Do not mark a check passed without dated runtime evidence.
+- CI autologin is permitted only in a disposable test image and must never be mistaken for normal-login validation.
 
 ## Gate A — Build and verify a private test ISO
 
-Use a dedicated Debian 13 amd64 builder or the reviewed CI build workflow. Generate a unique live-login password locally on the builder; do not share it in chat or commit it.
+Use a dedicated Debian 13 amd64 builder. Generate a unique live-login password locally; do not share it or commit it.
 
 ```bash
 umask 077
@@ -48,69 +36,53 @@ python3 scripts/verify-iso.py build/phase3-vm/AF-JARVIS-OS-v0.1-alpha.iso
 sha256sum build/phase3-vm/AF-JARVIS-OS-v0.1-alpha.iso
 ```
 
-Keep the ISO and hash private. Do not upload the password/hash to CI artifacts. Store the checksum and build manifest in local test notes, not in a public issue.
+Keep the ISO and hash private.
 
 ## Gate B — BIOS and UEFI normal-login tests
 
-Boot separately using the existing launcher:
+Use a fresh build with the repository's normal LightDM configuration (no autologin). Boot separately in BIOS and UEFI using `scripts/run-vm.sh`. For each mode record:
+- ISO checksum, source commit, QEMU version, RAM and vCPU allocation.
+- LightDM greeter appears.
+- Correct password permits login; incorrect password is rejected.
+- Openbox, panel and AF JARVIS desktop appear.
+- Core service starts for the logged-in user and recovers after a controlled stop.
+- Journal contains no unexplained critical session errors.
+
+The current GitHub QEMU workflow is not evidence for these password/login checks because it intentionally enables CI autologin.
+
+## Gate C — Read-only guest diagnostics
+
+After a normal login, wait at least 60 seconds and run:
 
 ```bash
-bash scripts/run-vm.sh build/phase3-vm/AF-JARVIS-OS-v0.1-alpha.iso bios
-bash scripts/run-vm.sh build/phase3-vm/AF-JARVIS-OS-v0.1-alpha.iso uefi
+sudo /usr/local/bin/af-jarvis-phase3-check > phase3-guest-report.json
 ```
 
-For each firmware mode, record:
-- ISO checksum and source commit.
-- Firmware mode, QEMU version, RAM and vCPU allocation.
-- LightDM greeter appears (no CI autologin).
-- Correct live-user password permits login; an incorrect password does not.
-- Openbox, panel and AF JARVIS desktop appear after login.
-- Core service is active for the logged-in user.
-- Desktop remains usable after Core is stopped; service recovery/reconnect behavior is observed.
-- No critical boot/session errors in the journal.
+The command emits a JSON report with identity, boot marker, whole-system memory, top process PSS, Core service status/journal, failed units, network device state, audio device listings, display information, boot timing and application presence. It is diagnostic evidence, not a substitute for interactive checks. Retain the complete JSON privately with the VM mode, QEMU version and ISO checksum.
 
-Useful commands in the guest:
-
-```bash
-systemctl --user status jarvis-core.service
-journalctl --user -b --no-pager
-systemctl --user --failed
-systemctl --failed
-```
-
-## Gate C — Desktop and OS behavior
-
-Complete each item separately and attach evidence:
-- [ ] Normal login and failed-password rejection.
-- [ ] Desktop session and Core start after login.
+Manually test and record:
 - [ ] Core stop/restart and UI reconnect.
-- [ ] Network connect/disconnect; deterministic local actions remain available offline.
+- [ ] Network disconnect/reconnect; deterministic local actions remain available offline.
 - [ ] Screen lock and password-required unlock.
 - [ ] Suspend/resume and lock-on-resume, if supported by the VM.
-- [ ] Audio output/input detection; record unavailable virtual devices honestly.
+- [ ] Audio playback and microphone behavior; note unavailable virtual devices.
 - [ ] File manager and installed desktop entries launch.
 - [ ] Confirmed guest shutdown works.
 - [ ] No unexpected failed system or user units.
 
-A VM may not accurately emulate laptop battery, Wi-Fi chipset, Bluetooth, touchpad, UHD 620 acceleration or physical suspend. Mark these HARDWARE-ONLY, not passed.
-
 ## Gate D — Whole-system idle RAM
 
-After a successful login, wait at least 60 seconds. Close browser/optional apps, do not run AI generation or voice capture, then run:
+The guest report includes MemTotal, MemAvailable and used estimate from `/proc/meminfo`, plus process PSS. Measure after 60 seconds idle, with browser/optional apps closed and no inference or voice capture. Process PSS totals are not whole-system used RAM. VM results are not a substitute for measuring the HP itself.
 
-```bash
-sudo python3 scripts/measure-idle.py > idle-measurement.json
-```
+## VM limitations
 
-Retain the complete JSON and note firmware mode, VM RAM allocation, QEMU version, boot time, session state and whether the measurement was taken with the dashboard open. Report MemTotal, MemAvailable, used RAM, swap and the largest process PSS values.
-
-Do not compare process RSS/PSS sums with whole-system used RAM. VM memory results are guest-specific and are not a substitute for the HP's physical hardware measurement.
+A VM cannot fully validate laptop battery, Wi-Fi chipset, Bluetooth, touchpad, UHD 620 acceleration, physical suspend or actual audio hardware. Mark these HARDWARE-ONLY, not passed.
 
 ## Exit criteria
 
 Phase 3 passes only when:
 1. BIOS and UEFI normal-login flows are documented without CI autologin.
-2. Desktop/Core lifecycle and the relevant VM checklist behaviors have evidence.
+2. Desktop/Core lifecycle and relevant VM checklist behaviors have runtime evidence.
 3. Whole-system idle RAM JSON is captured from inside the guest.
 4. Failures and VM-only limitations are recorded.
 
