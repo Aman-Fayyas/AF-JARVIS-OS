@@ -57,7 +57,7 @@ jobs:
             cd /work/AF-JARVIS-OS
             # CI-only: hide the account list to make the normal username/password greeter deterministic.
             # No autologin keys are added; this is a disposable image and does not change the repository.
-            printf "%s\\n" "greeter-hide-users=true" >> distro/includes/etc/lightdm/lightdm.conf.d/50-jarvis.conf
+            printf "%s\n" "greeter-hide-users=true" >> distro/includes/etc/lightdm/lightdm.conf.d/50-jarvis.conf
             export JARVIS_LIVE_PASSWORD_HASH_FILE=/tmp/af-jarvis-ci-password.hash
             bash scripts/build-iso.sh --build /work/AF-JARVIS-OS/build/qemu-normal-login
             rm -f "$JARVIS_LIVE_PASSWORD_HASH_FILE"
