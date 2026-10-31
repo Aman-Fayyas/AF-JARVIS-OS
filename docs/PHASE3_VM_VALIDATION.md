@@ -15,6 +15,14 @@ Scope: disposable QEMU guest only; no physical disks or installer target.
 
 This is a successful automated build-and-boot milestone, not completion of all Phase 3 exit criteria.
 
+## Normal-login CI gate — added 2026-10-31
+
+A separate workflow, `.github/workflows/phase3-normal-login.yml`, builds a disposable ISO without adding any LightDM autologin keys. It sets a temporary random password for the disposable `jarvis` account and enables the greeter's hidden-user mode only in the temporary builder copy so CI can enter the standard username/password flow deterministically.
+
+The workflow runs the same ISO in BIOS and UEFI QEMU guests under Xvfb, captures the greeter, submits the temporary username/password, and requires OCR evidence of the AF JARVIS desktop before passing. It uploads screenshots, OCR text, QEMU logs, result JSON and the ISO checksum as a short-lived artifact. The temporary password is masked in workflow logs and is not uploaded; the password hash is removed from the builder after image creation.
+
+This gate is an automated normal-password-login attempt, unlike the earlier autologin boot test. It does **not** yet verify incorrect-password rejection, interactive Core recovery, lock/unlock, suspend/resume, network/audio behavior, or export the guest's whole-system RAM diagnostic JSON. A green workflow is evidence only for the exact checks asserted by that run. Inspect its artifact and logs before marking the BIOS/UEFI login gate complete.
+
 ## Safety boundary
 
 - Never attach the host's physical disk to QEMU or run an installer against a host disk.
