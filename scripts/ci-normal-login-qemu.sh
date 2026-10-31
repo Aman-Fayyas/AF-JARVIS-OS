@@ -31,7 +31,7 @@ for _ in $(seq 1 90); do
   sleep 2
 done
 [[ -n "$WINDOW" ]] || { echo "QEMU display window did not appear" >&2; exit 1; }
-xdotool windowactivate --sync "$WINDOW"
+xdotool windowfocus --sync "$WINDOW"
 printf 'sendkey ret\\n' | socat - UNIX-CONNECT:"$MONITOR"
 sleep 90
 import -window "$WINDOW" "$OUT/$MODE-login-greeter.png"
