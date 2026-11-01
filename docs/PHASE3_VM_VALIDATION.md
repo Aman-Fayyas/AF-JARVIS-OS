@@ -23,6 +23,13 @@ The workflow runs the same ISO in BIOS and UEFI QEMU guests under Xvfb, captures
 
 This gate is an automated normal-password-login attempt, unlike the earlier autologin boot test. It does **not** yet verify incorrect-password rejection, interactive Core recovery, lock/unlock, suspend/resume, network/audio behavior, or export the guest's whole-system RAM diagnostic JSON. A green workflow is evidence only for the exact checks asserted by that run. Inspect its artifact and logs before marking the BIOS/UEFI login gate complete.
 
+
+## Normal-login OCR correction — 2026-11-01
+
+The first run of the updated normal-login workflow completed green, but post-run artifact inspection showed both BIOS and UEFI screenshots still on the LightDM username/password dialog. The automation had treated the string `jarvis` as proof of desktop visibility. That run is invalid as login evidence and must not be counted as passed.
+
+The test script was corrected on commit `522a54657d6253e654e9578a21fb975911c5f8bc`: it explicitly clicks the greeter's Log In button after entering the temporary password, rejects screenshots containing greeter labels, and requires three dashboard-specific OCR labels — `AF JARVIS OS`, `Dashboard`, and `Core online` — from the guest display with the QEMU title bar cropped out. The next run's BIOS and UEFI screenshots and OCR text must still be inspected before accepting the result. This improves the assertion but does not independently verify every login/security behavior.
+
 ## Safety boundary
 
 - Never attach the host's physical disk to QEMU or run an installer against a host disk.
