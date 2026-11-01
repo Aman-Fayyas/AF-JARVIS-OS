@@ -71,15 +71,26 @@ xdotool type --clearmodifiers --delay 100 jarvis
 xdotool key Return
 sleep 2
 xdotool type --clearmodifiers --delay 45 "$PASSWORD"
-xdotool key Return
-# Require AF JARVIS text inside the guest display, excluding the QEMU title bar.
+# Do not assume Return submits the LightDM password field. Click the visible
+# Log In button (coordinates are relative to the 960x540 QEMU SDL window).
+sleep 1
+xdotool mousemove --window "$WINDOW" 752 446 click 1
+# Require several dashboard-only labels in the guest display, and explicitly
+# reject the greeter. The QEMU title bar is cropped before OCR.
 for _ in $(seq 1 90); do
   kill -0 "$QEMU_PID"
   import -window "$WINDOW" "$OUT/$MODE-after-login.png"
   convert "$OUT/$MODE-after-login.png" -gravity North -chop 0x30 -colorspace Gray -resize 200% -contrast-stretch 1%x1% "$OUT/$MODE-screen-content.png"
   tesseract "$OUT/$MODE-screen-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-screen-ocr.txt" || true
-  if grep -Eqi 'AF[[:space:]]+JARVIS|JARVIS|Dashboard' "$OUT/$MODE-screen-ocr.txt"; then
-    printf '{"mode":"%s","login":"desktop-visible","evidence":"guest-display-ocr","qemu_pid":%s}\n' "$MODE" "$QEMU_PID" >"$OUT/$MODE-normal-login-result.json"
+  OCR="$OUT/$MODE-screen-ocr.txt"
+  if grep -Eqi 'Log In|Cancel|Enter your password|Password' "$OCR"; then
+    sleep 5
+    continue
+  fi
+  if grep -Eqi 'AF[[:space:]]+JARVIS[[:space:]]+OS' "$OCR" &&
+     grep -Eqi 'Dashboard' "$OCR" &&
+     grep -Eqi 'Core online' "$OCR"; then
+    printf '{"mode":"%s","login":"desktop-visible","evidence":"guest-dashboard-ocr","required_labels":["AF JARVIS OS","Dashboard","Core online"],"qemu_pid":%s}\n' "$MODE" "$QEMU_PID" >"$OUT/$MODE-normal-login-result.json"
     exit 0
   fi
   sleep 5
