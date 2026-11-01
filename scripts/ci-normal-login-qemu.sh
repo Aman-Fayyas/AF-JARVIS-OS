@@ -32,8 +32,6 @@ for _ in $(seq 1 90); do
 done
 [[ -n "$WINDOW" ]] || { echo "QEMU display window did not appear" >&2; exit 1; }
 xdotool windowfocus --sync "$WINDOW"
-# UEFI firmware can expose its boot menu later than the SDL window. Wait until
-# the actual menu is visible before sending Enter; an early key is silently lost.
 BOOT_MENU_SEEN=0
 for _ in $(seq 1 45); do
   import -window "$WINDOW" "$OUT/$MODE-boot-menu.png"
@@ -47,14 +45,10 @@ for _ in $(seq 1 45); do
 done
 [[ "$BOOT_MENU_SEEN" == 1 ]] || { echo "Firmware boot menu was not detected." >&2; cat "$OUT/$MODE-boot-menu-ocr.txt" >&2 || true; exit 1; }
 printf 'sendkey ret\n' | socat - UNIX-CONNECT:"$MONITOR"
-# Wait for the actual LightDM greeter. A fixed sleep can capture the boot
-# console and send credentials before the graphical login dialog exists.
 GREETER_SEEN=0
 for _ in $(seq 1 90); do
   kill -0 "$QEMU_PID"
   import -window "$WINDOW" "$OUT/$MODE-login-greeter.png"
-  # LightDM's greeter text is small in the 960x540 SDL capture. Upscale
-  # and use sparse-text OCR so detection does not depend on default page layout.
   convert "$OUT/$MODE-login-greeter.png" -gravity North -chop 0x30 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-login-content.png"
   tesseract "$OUT/$MODE-login-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-greeter-ocr.txt" || true
   if grep -Eqi 'Enter your password|Log In|Username' "$OUT/$MODE-greeter-ocr.txt"; then
@@ -64,19 +58,18 @@ for _ in $(seq 1 90); do
   sleep 3
 done
 [[ "$GREETER_SEEN" == 1 ]] || { echo "LightDM login greeter was not detected." >&2; cat "$OUT/$MODE-greeter-ocr.txt" >&2 || true; exit 1; }
-# The CI-only greeter hides the user list. Focus the username field explicitly,
-# then submit the temporary CI password; never use autologin.
-xdotool mousemove --window "$WINDOW" 690 360 click 1
+# QEMU SDL's xdotool window-relative origin excludes the 30px title bar,
+# while ImageMagick's captured window image includes it. Therefore subtract
+# 30px from the screenshot-space y coordinate of the Log In button.
+xdotool mousemove --window "$WINDOW" 690 330 click 1
 xdotool type --clearmodifiers --delay 100 jarvis
 xdotool key Return
 sleep 2
 xdotool type --clearmodifiers --delay 45 "$PASSWORD"
-# Do not assume Return submits the LightDM password field. Click the visible
-# Log In button (coordinates are relative to the 960x540 QEMU SDL window).
 sleep 1
-xdotool mousemove --window "$WINDOW" 752 446 click 1
-# Require several dashboard-only labels in the guest display, and explicitly
-# reject the greeter. The QEMU title bar is cropped before OCR.
+# Button center is (752,446) in captured-window coordinates; client coords
+# are (752,416) after excluding the 30px title bar.
+xdotool mousemove --window "$WINDOW" 752 416 click 1
 for _ in $(seq 1 90); do
   kill -0 "$QEMU_PID"
   import -window "$WINDOW" "$OUT/$MODE-after-login.png"
