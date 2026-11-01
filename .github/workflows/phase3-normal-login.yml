@@ -62,12 +62,7 @@ jobs:
             # QEMU image and permit password auth for the ephemeral jarvis account.
             # This configuration is injected into this build only.
             mkdir -p distro/includes/etc/ssh/sshd_config.d
-            cat > distro/includes/etc/ssh/sshd_config.d/99-af-jarvis-ci.conf <<SSHCFG
-            PasswordAuthentication yes
-            KbdInteractiveAuthentication no
-            PermitRootLogin no
-            UsePAM yes
-            SSHCFG
+            printf '%s\n' 'PasswordAuthentication yes' 'KbdInteractiveAuthentication no' 'PermitRootLogin no' 'UsePAM yes' > distro/includes/etc/ssh/sshd_config.d/99-af-jarvis-ci.conf
             mkdir -p distro/includes/etc/systemd/system/multi-user.target.wants
             ln -sf /usr/lib/systemd/system/ssh.service distro/includes/etc/systemd/system/multi-user.target.wants/ssh.service
             export JARVIS_LIVE_PASSWORD_HASH_FILE=/tmp/af-jarvis-ci-password.hash
