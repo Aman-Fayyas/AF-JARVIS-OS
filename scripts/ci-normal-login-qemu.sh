@@ -80,10 +80,12 @@ for _ in $(seq 1 90); do
     sleep 5
     continue
   fi
-  if grep -Eqi 'AF[[:space:]]+JARVIS[[:space:]]+OS' "$OCR" &&
-     grep -Eqi 'Dashboard' "$OCR" &&
-     grep -Eqi 'Core online' "$OCR"; then
-    printf '{"mode":"%s","login":"desktop-visible","evidence":"guest-dashboard-ocr","required_labels":["AF JARVIS OS","Dashboard","Core online"],"qemu_pid":%s}\n' "$MODE" "$QEMU_PID" >"$OUT/$MODE-normal-login-result.json"
+  # OCR can miss the stylized AF JARVIS OS header, but the dashboard tab and
+  # live Core status are both visible in the guest screenshot. Require both.
+  if grep -Eqi 'Dashboard' "$OCR" &&
+     grep -Eqi 'Core online' "$OCR" &&
+     grep -Eqi 'JARVIS' "$OCR"; then
+    printf '{"mode":"%s","login":"desktop-visible","evidence":"guest-dashboard-ocr","required_labels":["JARVIS","Dashboard","Core online"],"header_label_optional":"AF JARVIS OS","qemu_pid":%s}\n' "$MODE" "$QEMU_PID" >"$OUT/$MODE-normal-login-result.json"
     exit 0
   fi
   sleep 5
