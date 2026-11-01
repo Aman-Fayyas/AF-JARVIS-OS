@@ -53,6 +53,7 @@ fonts-dejavu-core
 adwaita-icon-theme
 espeak-ng
 openssh-client
+openssh-server
 firmware-iwlwifi
 firmware-realtek
 firmware-atheros
