@@ -102,3 +102,12 @@ Phase 3 passes only when:
 4. Failures and VM-only limitations are recorded.
 
 Only then consider Phase 4: a live USB boot on the HP 250 G7. No installation. Keep Windows and all partitions untouched.
+
+
+## Wrong-password and guest-diagnostics automation — 2026-11-01
+
+The Phase 3 normal-login script now attempts a deliberately invalid password before the correct ephemeral password. It captures the guest display and requires LightDM greeter/authentication text to remain visible while dashboard labels remain absent. This is a visual rejection check, not a full PAM policy audit; inspect both BIOS and UEFI evidence before marking it passed.
+
+The disposable CI image also includes OpenSSH Server. QEMU exposes guest port 22 only on runner loopback (127.0.0.1:2222), and after successful normal login the runner invokes the existing read-only `af-jarvis-phase3-check` as the `jarvis` account. The resulting JSON is schema-checked for the AF JARVIS boot marker, account identity, whole-system MemTotal and Core service diagnostic, then uploaded with the screenshots. The SSH server and port forward are CI-only; no host disk is attached. The temporary guest password is not written into the report or artifact.
+
+These checks are pending until a run completes and the uploaded wrong-password screenshots/results and diagnostic JSON are inspected. A failed SSH readiness check must be treated as an infrastructure/diagnostic failure, not a product pass.
