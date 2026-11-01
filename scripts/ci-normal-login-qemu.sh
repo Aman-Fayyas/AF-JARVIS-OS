@@ -82,16 +82,15 @@ if grep -Eqi 'Dashboard|Core online' "$OUT/$MODE-wrong-password-ocr.txt"; then
 fi
 printf '{"mode":"%s","wrong_password":"rejected-greeter-remained-visible"}\\n' "$MODE" >"$OUT/$MODE-wrong-password-result.json"
 
-# Now authenticate with the correct ephemeral password.
-xdotool mousemove --window "$WINDOW" 690 360 click 1
-xdotool type --clearmodifiers --delay 100 jarvis
-xdotool key Return
-sleep 2
+# After LightDM rejects a password it keeps the username and returns focus
+# to the password entry. The previous automation clicked a stale coordinate
+# and re-entered the username, so the valid password never reached the field.
+# Keep the existing jarvis username and replace only the focused password.
+xdotool key ctrl+a
 xdotool type --clearmodifiers --delay 45 "$PASSWORD"
 sleep 1
 xdotool key Return
 sleep 3
-xdotool mousemove --window "$WINDOW" 752 446 click 1
 for _ in $(seq 1 90); do
   kill -0 "$QEMU_PID"
   import -window "$WINDOW" "$OUT/$MODE-after-login.png"
