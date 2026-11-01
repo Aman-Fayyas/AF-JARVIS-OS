@@ -7,7 +7,7 @@ PASSWORD="${3:?temporary test password}"
 OUT="${4:-.}"
 mkdir -p "$OUT"
 MONITOR="/tmp/af-jarvis-${MODE}-monitor.sock"
-QEMU=(qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom "$ISO" -boot d -display sdl -no-reboot -monitor "unix:$MONITOR,server,nowait")
+QEMU=(qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom "$ISO" -boot d -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 -display sdl -no-reboot -monitor "unix:$MONITOR,server,nowait")
 if [[ "$MODE" == uefi ]]; then
   OVMF_CODE=$(find /usr/share/OVMF -type f \( -name 'OVMF_CODE_4M.fd' -o -name 'OVMF_CODE.fd' \) | head -n1)
   [[ -n "$OVMF_CODE" ]]
@@ -108,6 +108,32 @@ for _ in $(seq 1 90); do
      grep -Eqi 'Core online' "$OCR" &&
      grep -Eqi 'JARVIS' "$OCR"; then
     printf '{"mode":"%s","login":"desktop-visible","evidence":"guest-dashboard-ocr","required_labels":["JARVIS","Dashboard","Core online"],"header_label_optional":"AF JARVIS OS","qemu_pid":%s}\n' "$MODE" "$QEMU_PID" >"$OUT/$MODE-normal-login-result.json"
+    # Collect read-only diagnostics from the disposable guest over a loopback-only
+    # QEMU user-network forward. The SSH server exists only in this CI image.
+    SSH_READY=0
+    for _ in $(seq 1 90); do
+      if SSHPASS="$PASSWORD" sshpass -e ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 jarvis@127.0.0.1 'true' >/dev/null 2>&1; then
+        SSH_READY=1
+        break
+      fi
+      kill -0 "$QEMU_PID"
+      sleep 2
+    done
+    [[ "$SSH_READY" == 1 ]] || { echo "Guest SSH unavailable; diagnostics not collected." >&2; exit 1; }
+    SSHPASS="$PASSWORD" sshpass -e ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null jarvis@127.0.0.1 \
+      'uid=$(id -u); export XDG_RUNTIME_DIR="/run/user/$uid"; export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"; export DISPLAY=:0; python3 /usr/local/bin/af-jarvis-phase3-check' \
+      >"$OUT/$MODE-phase3-guest-report.json"
+    python3 - "$OUT/$MODE-phase3-guest-report.json" <<'PY'
+import json,sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    report=json.load(f)
+assert report.get("schema") == "af-jarvis-phase3-guest-check-v1"
+assert report.get("boot_marker") is True
+assert report.get("identity",{}).get("user") == "jarvis"
+assert report.get("memory_mib",{}).get("mem_total")
+assert "user_service_status" in report.get("checks",{})
+print("Guest diagnostic JSON validated.")
+PY
     exit 0
   fi
   sleep 5
