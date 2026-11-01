@@ -58,6 +58,18 @@ jobs:
             # CI-only: hide the account list to make the normal username/password greeter deterministic.
             # No autologin keys are added; this is a disposable image and does not change the repository.
             printf "%s\n" "greeter-hide-users=true" >> distro/includes/etc/lightdm/lightdm.conf.d/50-jarvis.conf
+            # CI-only diagnostics access: explicitly enable sshd in the disposable
+            # QEMU image and permit password auth for the ephemeral jarvis account.
+            # This configuration is injected into this build only.
+            mkdir -p distro/includes/etc/ssh/sshd_config.d
+            cat > distro/includes/etc/ssh/sshd_config.d/99-af-jarvis-ci.conf <<SSHCFG
+            PasswordAuthentication yes
+            KbdInteractiveAuthentication no
+            PermitRootLogin no
+            UsePAM yes
+            SSHCFG
+            mkdir -p distro/includes/etc/systemd/system/multi-user.target.wants
+            ln -sf /usr/lib/systemd/system/ssh.service distro/includes/etc/systemd/system/multi-user.target.wants/ssh.service
             export JARVIS_LIVE_PASSWORD_HASH_FILE=/tmp/af-jarvis-ci-password.hash
             bash scripts/build-iso.sh --build /work/AF-JARVIS-OS/build/qemu-normal-login
             rm -f "$JARVIS_LIVE_PASSWORD_HASH_FILE"
