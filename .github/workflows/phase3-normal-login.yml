@@ -20,7 +20,7 @@ jobs:
       - name: Install host and display-test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap rsync qemu-system-x86 ovmf socat xvfb xdotool imagemagick tesseract-ocr sshpass
+          sudo apt-get install -y debootstrap rsync qemu-system-x86 ovmf socat xvfb xdotool imagemagick tesseract-ocr sshpass openssl
 
       - name: Create isolated Debian 13 builder
         run: |
@@ -39,8 +39,20 @@ jobs:
           deb http://security.debian.org/debian-security trixie-security main contrib non-free-firmware
           EOF
 
-      - name: Install image build dependencies
+      - name: Prepare ephemeral CI login credentials
+        shell: bash
         run: |
+          set -euo pipefail
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          printf 'AF_JARVIS_CI_PASSWORD=%s\n' "$password" >> "$GITHUB_ENV"
+          printf '%s' "$password" | openssl passwd -6 -stdin > "$RUNNER_TEMP/af-jarvis-ci-password.hash"
+          chmod 600 "$RUNNER_TEMP/af-jarvis-ci-password.hash"
+          sudo install -D -m 600 "$RUNNER_TEMP/af-jarvis-ci-password.hash" /opt/af-jarvis-debian/tmp/af-jarvis-ci-password.hash
+
+      - name: Install image build dependencies and build ISO
+        run: |
+          set -euo pipefail
           sudo chroot /opt/af-jarvis-debian /bin/bash /work/AF-JARVIS-OS/scripts/ci-prepare-normal-login.sh
           sudo cp /opt/af-jarvis-debian/work/AF-JARVIS-OS/build/qemu-normal-login/AF-JARVIS-OS-v0.1-alpha.iso .
           sudo chown "$USER:$USER" AF-JARVIS-OS-v0.1-alpha.iso
