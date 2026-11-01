@@ -58,18 +58,18 @@ for _ in $(seq 1 90); do
   sleep 3
 done
 [[ "$GREETER_SEEN" == 1 ]] || { echo "LightDM login greeter was not detected." >&2; cat "$OUT/$MODE-greeter-ocr.txt" >&2 || true; exit 1; }
-# QEMU SDL's xdotool window-relative origin excludes the 30px title bar,
-# while ImageMagick's captured window image includes it. Therefore subtract
-# 30px from the screenshot-space y coordinate of the Log In button.
-xdotool mousemove --window "$WINDOW" 690 330 click 1
+# The captured SDL coordinates align with xdotool's window-relative coordinates.
+xdotool mousemove --window "$WINDOW" 690 360 click 1
 xdotool type --clearmodifiers --delay 100 jarvis
 xdotool key Return
 sleep 2
 xdotool type --clearmodifiers --delay 45 "$PASSWORD"
 sleep 1
-# Button center is (752,446) in captured-window coordinates; client coords
-# are (752,416) after excluding the 30px title bar.
-xdotool mousemove --window "$WINDOW" 752 416 click 1
+# Password field has focus; submit with Return first, then click the visible
+# Log In button as a fallback. Keep both actions inside the disposable guest.
+xdotool key Return
+sleep 3
+xdotool mousemove --window "$WINDOW" 752 446 click 1
 for _ in $(seq 1 90); do
   kill -0 "$QEMU_PID"
   import -window "$WINDOW" "$OUT/$MODE-after-login.png"
