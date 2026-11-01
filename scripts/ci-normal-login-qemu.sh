@@ -53,8 +53,10 @@ GREETER_SEEN=0
 for _ in $(seq 1 90); do
   kill -0 "$QEMU_PID"
   import -window "$WINDOW" "$OUT/$MODE-login-greeter.png"
-  convert "$OUT/$MODE-login-greeter.png" -gravity North -chop 0x30 "$OUT/$MODE-login-content.png"
-  tesseract "$OUT/$MODE-login-content.png" stdout 2>/dev/null >"$OUT/$MODE-greeter-ocr.txt" || true
+  # LightDM's greeter text is small in the 960x540 SDL capture. Upscale
+  # and use sparse-text OCR so detection does not depend on default page layout.
+  convert "$OUT/$MODE-login-greeter.png" -gravity North -chop 0x30 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-login-content.png"
+  tesseract "$OUT/$MODE-login-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-greeter-ocr.txt" || true
   if grep -Eqi 'Enter your password|Log In|Username' "$OUT/$MODE-greeter-ocr.txt"; then
     GREETER_SEEN=1
     break
@@ -74,8 +76,8 @@ xdotool key Return
 for _ in $(seq 1 90); do
   kill -0 "$QEMU_PID"
   import -window "$WINDOW" "$OUT/$MODE-after-login.png"
-  convert "$OUT/$MODE-after-login.png" -gravity North -chop 0x30 "$OUT/$MODE-screen-content.png"
-  tesseract "$OUT/$MODE-screen-content.png" stdout 2>/dev/null >"$OUT/$MODE-screen-ocr.txt" || true
+  convert "$OUT/$MODE-after-login.png" -gravity North -chop 0x30 -colorspace Gray -resize 200% -contrast-stretch 1%x1% "$OUT/$MODE-screen-content.png"
+  tesseract "$OUT/$MODE-screen-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-screen-ocr.txt" || true
   if grep -Eqi 'AF[[:space:]]+JARVIS|JARVIS|Dashboard' "$OUT/$MODE-screen-ocr.txt"; then
     printf '{"mode":"%s","login":"desktop-visible","evidence":"guest-display-ocr","qemu_pid":%s}\n' "$MODE" "$QEMU_PID" >"$OUT/$MODE-normal-login-result.json"
     exit 0
