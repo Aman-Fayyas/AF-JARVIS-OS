@@ -58,15 +58,37 @@ for _ in $(seq 1 90); do
   sleep 3
 done
 [[ "$GREETER_SEEN" == 1 ]] || { echo "LightDM login greeter was not detected." >&2; cat "$OUT/$MODE-greeter-ocr.txt" >&2 || true; exit 1; }
-# The captured SDL coordinates align with xdotool's window-relative coordinates.
+# First submit a deliberately incorrect password. A rejection is proven
+# only if the greeter remains visible and the dashboard does not appear.
+xdotool mousemove --window "$WINDOW" 690 360 click 1
+xdotool type --clearmodifiers --delay 100 jarvis
+xdotool key Return
+sleep 2
+xdotool type --clearmodifiers --delay 45 "definitely-not-the-password"
+sleep 1
+xdotool key Return
+sleep 5
+import -window "$WINDOW" "$OUT/$MODE-wrong-password.png"
+convert "$OUT/$MODE-wrong-password.png" -gravity North -chop 0x30 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-wrong-password-content.png"
+tesseract "$OUT/$MODE-wrong-password-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-wrong-password-ocr.txt" || true
+if ! grep -Eqi 'Log In|Cancel|Enter your password|Password|Try again|Authentication' "$OUT/$MODE-wrong-password-ocr.txt"; then
+  echo "Wrong-password rejection not proven: login greeter was not detected after invalid credentials." >&2
+  cat "$OUT/$MODE-wrong-password-ocr.txt" >&2 || true
+  exit 1
+fi
+if grep -Eqi 'Dashboard|Core online' "$OUT/$MODE-wrong-password-ocr.txt"; then
+  echo "Wrong password unexpectedly reached the desktop." >&2
+  exit 1
+fi
+printf '{"mode":"%s","wrong_password":"rejected-greeter-remained-visible"}\\n' "$MODE" >"$OUT/$MODE-wrong-password-result.json"
+
+# Now authenticate with the correct ephemeral password.
 xdotool mousemove --window "$WINDOW" 690 360 click 1
 xdotool type --clearmodifiers --delay 100 jarvis
 xdotool key Return
 sleep 2
 xdotool type --clearmodifiers --delay 45 "$PASSWORD"
 sleep 1
-# Password field has focus; submit with Return first, then click the visible
-# Log In button as a fallback. Keep both actions inside the disposable guest.
 xdotool key Return
 sleep 3
 xdotool mousemove --window "$WINDOW" 752 446 click 1
