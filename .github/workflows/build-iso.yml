@@ -16,6 +16,25 @@ jobs:
       - name: Check out AF JARVIS OS
         uses: actions/checkout@v4
 
+      - name: Validate and hash private live-user password
+        env:
+          JARVIS_LIVE_PASSWORD: ${{ secrets.JARVIS_LIVE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${JARVIS_LIVE_PASSWORD:-}" ]]; then
+            echo "::error::Configure the JARVIS_LIVE_PASSWORD Actions secret before running this workflow."
+            exit 1
+          fi
+          if (( ${#JARVIS_LIVE_PASSWORD} < 16 )); then
+            echo "::error::JARVIS_LIVE_PASSWORD must contain at least 16 characters."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$JARVIS_LIVE_PASSWORD" | openssl passwd -6 -stdin > "$RUNNER_TEMP/af-jarvis-live-password.hash"
+          unset JARVIS_LIVE_PASSWORD
+          test -s "$RUNNER_TEMP/af-jarvis-live-password.hash"
+          chmod 600 "$RUNNER_TEMP/af-jarvis-live-password.hash"
+
       - name: Show runner resources
         run: |
           uname -a
@@ -25,7 +44,7 @@ jobs:
       - name: Install Debian bootstrap tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap rsync
+          sudo apt-get install -y debootstrap rsync openssl
 
       - name: Create Debian 13 amd64 build environment
         run: |
@@ -69,17 +88,16 @@ jobs:
 
       - name: Build AF JARVIS OS ISO
         run: |
+          set -euo pipefail
+          sudo install -m 600 "$RUNNER_TEMP/af-jarvis-live-password.hash" /opt/af-jarvis-debian/tmp/af-jarvis-live-password.hash
           sudo chroot /opt/af-jarvis-debian /bin/bash -lc '
             set -euo pipefail
             cd /work/AF-JARVIS-OS
             umask 077
-            HASH_FILE=/tmp/af-jarvis-ci-password.hash
-            install -m 600 /dev/null "$HASH_FILE"
-            openssl passwd -6 "jarvis-ci-live" > "$HASH_FILE"
-            chmod 600 "$HASH_FILE"
+            HASH_FILE=/tmp/af-jarvis-live-password.hash
+            trap '\''rm -f "$HASH_FILE" '\'' EXIT
             export JARVIS_LIVE_PASSWORD_HASH_FILE="$HASH_FILE"
             bash scripts/build-iso.sh --build /work/AF-JARVIS-OS/build/github-actions
-            rm -f "$HASH_FILE"
           '
 
       - name: Show build outputs
@@ -108,6 +126,12 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
+
+      - name: Clean up private password hash
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/af-jarvis-live-password.hash"
+          sudo rm -f /opt/af-jarvis-debian/tmp/af-jarvis-live-password.hash 2>/dev/null || true
 
       - name: Unmount Debian environment
         if: always()
