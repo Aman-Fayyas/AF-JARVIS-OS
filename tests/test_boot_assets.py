@@ -16,6 +16,9 @@ class BootAssetsTests(unittest.TestCase):
         match = re.search(r"MOUSE_INDEX=\$\(sed -nE '([^']+)'", script)
         self.assertIsNotNone(match, 'normal-login script must parse QEMU absolute tablet IDs')
         pattern = match.group(1)
+        self.assertIn('xdotool mousemove --window "$WINDOW" 183 140', script)
+        self.assertIn('xdotool click 1', script)
+        self.assertNotIn("printf 'mouse_move", script)
         samples = (
             '* Mouse #3: QEMU HID Tablet (absolute)\n',
             '* Mouse #4: QEMU USB Tablet\n',
