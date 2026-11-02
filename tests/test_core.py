@@ -178,6 +178,12 @@ class CoreTests(unittest.TestCase):
             Memory(directory)
         self.assertEqual(memory.path.read_bytes(), b'preserve this damaged primary')
 
+    def test_memory_connection_pins_extra_sync_and_busy_timeout(self):
+        memory = Memory(self.root / 'durable-memory', timeout=0.25)
+        with memory.connect() as db:
+            self.assertEqual(db.execute('PRAGMA synchronous').fetchone()[0], 3)
+            self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0], 250)
+
     def test_locked_memory_database_times_out_then_recovers(self):
         memory = Memory(self.root / 'locked-memory', timeout=0.05)
         blocker = sqlite3.connect(memory.path, timeout=0.05)
