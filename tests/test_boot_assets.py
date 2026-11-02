@@ -1,6 +1,7 @@
 """Execute shell assets against isolated stubs; these are not Linux boot tests."""
 from pathlib import Path
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -10,6 +11,26 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 
 class BootAssetsTests(unittest.TestCase):
+    def test_qemu_mouse_probe_accepts_hid_and_usb_tablet_labels(self):
+        script = (ROOT / 'scripts/ci-normal-login-qemu.sh').read_text()
+        match = re.search(r"MOUSE_INDEX=\\$\\(sed -nE '([^']+)'", script)
+        self.assertIsNotNone(match, 'normal-login script must parse QEMU absolute tablet IDs')
+        pattern = match.group(1)
+        samples = (
+            '* Mouse #3: QEMU HID Tablet (absolute)\\n',
+            '* Mouse #4: QEMU USB Tablet\\n',
+        )
+        for sample, expected in zip(samples, ('3\\n', '4\\n')):
+            with self.subTest(sample=sample):
+                result = subprocess.run(
+                    ['sed', '-nE', pattern],
+                    input=sample,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                )
+                self.assertEqual(result.stdout, expected)
+
     def test_session_starts_openbox_when_user_services_fail(self):
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
