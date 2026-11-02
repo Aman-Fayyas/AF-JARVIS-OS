@@ -163,22 +163,18 @@ PY
     done
     [[ "$CORE_ONLINE_SEEN" == 1 ]] || { echo "Desktop did not reconnect after Core restart." >&2; cat "$OUT/$MODE-core-reconnected-ocr.txt" >&2 || true; exit 1; }
     printf '{"mode":"%s","core_stop":"desktop-visible-and-reported-offline","core_restart":"desktop-reconnected-and-reported-online"}\n' "$MODE" >"$OUT/$MODE-core-lifecycle-result.json"
-    # Set 1: send an absolute USB-tablet pointer event through QEMU's monitor.
-    # This tests the guest HID mouse path without relying on SDL/Xvfb window scaling.
+    # Set 1: verify QEMU's active absolute HID tablet and send a window-relative click.
+    # The SDL window receives xdotool input; the active guest device is checked below.
     printf 'info mice\n' | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-mouse-devices.txt"
     # QEMU 8.2 reports this device as "QEMU HID Tablet (absolute)" in info mice.
     # Accept the older USB Tablet label too, while still selecting the absolute tablet.
     MOUSE_INDEX=$(sed -nE 's/.*Mouse #([0-9]+): QEMU (USB|HID) Tablet.*/\1/p' "$OUT/$MODE-mouse-devices.txt" | head -n1)
     [[ -n "$MOUSE_INDEX" ]] || { echo "QEMU USB tablet was not enumerated by the monitor." >&2; cat "$OUT/$MODE-mouse-devices.txt" >&2; exit 1; }
-    # Guest display is 1280x800; QEMU absolute pointer coordinates use 0..32767.
-    MOUSE_X=$((183 * 32767 / 1280))
-    MOUSE_Y=$((140 * 32767 / 800))
-    {
-      printf 'mouse_set %s\n' "$MOUSE_INDEX"
-      printf 'mouse_move %s %s\n' "$MOUSE_X" "$MOUSE_Y"
-      printf 'mouse_button 1\n'
-      printf 'mouse_button 0\n'
-    } | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-mouse-click-monitor.txt"
+    grep -Fq "* Mouse #$MOUSE_INDEX:" "$OUT/$MODE-mouse-devices.txt" || { echo "QEMU HID tablet is not the active input device." >&2; cat "$OUT/$MODE-mouse-devices.txt" >&2; exit 1; }
+    printf 'active_tablet_index=%s\ninput=xdotool window-relative click at 183x140\n' "$MOUSE_INDEX" >"$OUT/$MODE-mouse-click-input.txt"
+    xdotool mousemove --window "$WINDOW" 183 140
+    sleep 0.3
+    xdotool click 1
     sleep 1
     import -window "$WINDOW" "$OUT/$MODE-assistant-page.png"
     convert "$OUT/$MODE-assistant-page.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-assistant-page-content.png"
