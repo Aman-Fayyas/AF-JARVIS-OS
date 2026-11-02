@@ -78,6 +78,74 @@ class Cancellation:
             self.response = None
 
 
+def iter_sse_data(response, cancel, started, timeout=180, max_event=65536):
+    """Yield complete SSE data payloads, accepting CRLF, LF and CR line endings.
+
+    The final unterminated event is deliberately discarded, as required by
+    the event-stream format. read1() avoids waiting to fill a large read buffer.
+    """
+    buffer = bytearray()
+    data_lines = []
+    event_size = 0
+    first_line = True
+    while not cancel.event.is_set():
+        if time.monotonic() - started > timeout:
+            raise ProviderError("Generation exceeded the 180-second deadline")
+        chunk = response.read1(4096)
+        if not chunk:
+            break
+        buffer.extend(chunk)
+        cursor = 0
+        while cursor < len(buffer):
+            marker = buffer.find(b"\n", cursor)
+            cr = buffer.find(b"\r", cursor)
+            endings = [pos for pos in (marker, cr) if pos >= 0]
+            if not endings:
+                if len(buffer) - cursor > max_event:
+                    raise ProviderError("Oversized SSE line")
+                break
+            end = min(endings)
+            if buffer[end] == 13 and end + 1 == len(buffer):
+                # A CR at the chunk boundary may be the first half of CRLF.
+                if end > cursor and end - cursor > max_event:
+                    raise ProviderError("Oversized SSE line")
+                break
+            line_bytes = bytes(buffer[cursor:end])
+            next_cursor = end + 1
+            if buffer[end] == 13 and next_cursor < len(buffer) and buffer[next_cursor] == 10:
+                next_cursor += 1
+            if len(line_bytes) > max_event:
+                raise ProviderError("Oversized SSE line")
+            try:
+                line = line_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                raise ProviderError("Provider stream was not valid UTF-8") from None
+            if first_line:
+                line = line.removeprefix("\ufeff")
+                first_line = False
+            if line == "":
+                if data_lines:
+                    payload = "\n".join(data_lines)
+                    data_lines.clear()
+                    event_size = 0
+                    yield payload
+                else:
+                    event_size = 0
+            elif not line.startswith(":"):
+                field, separator, value = line.partition(":")
+                if separator and value.startswith(" "):
+                    value = value[1:]
+                if field == "data":
+                    data_lines.append(value)
+                    event_size += len(value.encode("utf-8")) + 1
+                    if event_size > max_event:
+                        raise ProviderError("Oversized SSE event")
+            cursor = next_cursor
+        if cursor:
+            del buffer[:cursor]
+    # An incomplete line or event at EOF is not dispatched.
+
+
 class OpenAIProvider:
     def __init__(self, config, profile):
         self.profile = profile
@@ -128,48 +196,34 @@ class OpenAIProvider:
         cancel.attach(response)
         started = time.monotonic()
         total = 0
-        lines = []
         finished = False
         try:
-            if "text/event-stream" not in response.headers.get("Content-Type", ""):
+            if "text/event-stream" not in response.headers.get("Content-Type", "").lower():
                 raise ProviderError("Provider did not return an SSE stream")
-            while not cancel.event.is_set():
-                if time.monotonic() - started > 180:
-                    raise ProviderError("Generation exceeded the 180-second deadline")
-                line = response.readline(65537)
-                if len(line) > 65536:
-                    raise ProviderError("Oversized SSE event")
-                if not line:
+            for data in iter_sse_data(response, cancel, started):
+                if cancel.event.is_set():
                     break
-                line = line.decode("utf-8").rstrip("\r\n")
-                if line.startswith("data:"):
-                    lines.append(line[5:].lstrip())
-                    if sum(map(len, lines)) > 65536:
-                        raise ProviderError("Oversized SSE event")
-                elif not line and lines:
-                    data = "\n".join(lines)
-                    lines.clear()
-                    if data == "[DONE]":
+                if data == "[DONE]":
+                    finished = True
+                    break
+                obj = json.loads(data)
+                if not isinstance(obj, dict) or not isinstance(obj.get("choices", []), list):
+                    raise ProviderError("Malformed provider choices")
+                if "error" in obj:
+                    raise ProviderError("Provider returned a stream error")
+                for choice in obj.get("choices", []):
+                    if not isinstance(choice, dict) or not isinstance(choice.get("delta", {}), dict):
+                        raise ProviderError("Malformed provider delta")
+                    token = choice.get("delta", {}).get("content") or ""
+                    if not isinstance(token, str):
+                        raise ProviderError("Unsupported stream content")
+                    if choice.get("finish_reason"):
                         finished = True
-                        break
-                    obj = json.loads(data)
-                    if not isinstance(obj, dict) or not isinstance(obj.get("choices", []), list):
-                        raise ProviderError("Malformed provider choices")
-                    if "error" in obj:
-                        raise ProviderError("Provider returned a stream error")
-                    for choice in obj.get("choices", []):
-                        if not isinstance(choice, dict) or not isinstance(choice.get("delta", {}), dict):
-                            raise ProviderError("Malformed provider delta")
-                        token = choice.get("delta", {}).get("content") or ""
-                        if not isinstance(token, str):
-                            raise ProviderError("Unsupported stream content")
-                        if choice.get("finish_reason"):
-                            finished = True
-                        total += len(token)
-                        if total > self.limit:
-                            raise ProviderError("Response exceeded configured size limit")
-                        if token:
-                            yield token
+                    total += len(token)
+                    if total > self.limit:
+                        raise ProviderError("Response exceeded configured size limit")
+                    if token:
+                        yield token
             if not finished and not cancel.event.is_set():
                 raise ProviderError("Stream disconnected before completion")
         except (ValueError, OSError, TimeoutError, AttributeError) as error:
