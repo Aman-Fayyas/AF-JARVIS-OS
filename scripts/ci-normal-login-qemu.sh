@@ -7,7 +7,7 @@ PASSWORD="${3:?temporary test password}"
 OUT="${4:-.}"
 mkdir -p "$OUT"
 MONITOR="/tmp/af-jarvis-${MODE}-monitor.sock"
-QEMU=(qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom "$ISO" -boot d -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 -usb -device usb-tablet -audiodev driver=none,id=audio0 -device intel-hda -device hda-duplex,audiodev=audio0 -display sdl -full-screen -no-reboot -monitor "unix:$MONITOR,server,nowait")
+QEMU=(qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom "$ISO" -boot d -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 -usb -device usb-tablet -audiodev driver=none,id=audio0 -device intel-hda -device hda-duplex,audiodev=audio0 -display gtk,full-screen=on,zoom-to-fit=on,show-menubar=off -no-reboot -monitor "unix:$MONITOR,server,nowait")
 if [[ "$MODE" == uefi ]]; then
   OVMF_CODE=$(find /usr/share/OVMF -type f \( -name 'OVMF_CODE_4M.fd' -o -name 'OVMF_CODE.fd' \) | head -n1)
   [[ -n "$OVMF_CODE" ]]
@@ -31,8 +31,8 @@ for _ in $(seq 1 90); do
   sleep 2
 done
 [[ -n "$WINDOW" ]] || { echo "QEMU display window did not appear" >&2; exit 1; }
-# Keep the SDL window at the complete CI framebuffer. The smaller 960x640
-# window clipped the Assistant prompt and made keyboard focus testing invalid.
+# Require the GTK fullscreen surface to expose the complete 1280x800 CI
+# framebuffer; the smaller SDL window clipped the Assistant prompt.
 xdotool getwindowgeometry --shell "$WINDOW" >"$OUT/$MODE-qemu-window-geometry.txt"
 WINDOW_WIDTH=$(sed -n 's/^WIDTH=//p' "$OUT/$MODE-qemu-window-geometry.txt")
 WINDOW_HEIGHT=$(sed -n 's/^HEIGHT=//p' "$OUT/$MODE-qemu-window-geometry.txt")
