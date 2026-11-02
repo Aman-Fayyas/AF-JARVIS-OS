@@ -304,8 +304,9 @@ class Memory:
             db.execute("DELETE FROM facts")
         # A previous snapshot/quarantine must not restore data the user cleared.
         self.backup_path.unlink(missing_ok=True)
-        for quarantined in self.directory.glob("memory.sqlite3.corrupt-*"):
-            quarantined.unlink(missing_ok=True)
+        for pattern in ("memory.sqlite3.corrupt-*", ".memory-backup-*", ".memory-restore-*"):
+            for leftover in self.directory.glob(pattern):
+                leftover.unlink(missing_ok=True)
         self._fsync_directory(self.directory)
         self.backup_error = None
 
