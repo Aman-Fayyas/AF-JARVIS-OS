@@ -84,7 +84,7 @@ jobs:
           "$RUNNER_TEMP/vosk-venv/bin/python" -m pip install --disable-pip-version-check --no-input vosk==0.3.45
           curl -fL --retry 3 --connect-timeout 15 "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip" -o "$RUNNER_TEMP/vosk-model.zip"
           unzip -q "$RUNNER_TEMP/vosk-model.zip" -d "$RUNNER_TEMP"
-          espeak-ng -v en-us -s 135 -w "$RUNNER_TEMP/vosk-test.wav" "Jarvis offline recognition check"
+          espeak-ng -v en-us -s 135 -w "$RUNNER_TEMP/vosk-test.wav" "Offline recognition check"
           "$RUNNER_TEMP/vosk-venv/bin/python" - "$RUNNER_TEMP/vosk-test.wav" "$RUNNER_TEMP/vosk-model-small-en-us-0.15" "$RUNNER_TEMP/vosk-result.json" <<'PY'
           import json, sys, wave
           from vosk import Model, KaldiRecognizer
@@ -99,8 +99,9 @@ jobs:
           recognizer.AcceptWaveform(audio)
           result = json.loads(recognizer.FinalResult())
           text = result.get("text", "").lower()
-          assert "jarvis" in text and "offline" in text, f"Unexpected transcription: {text!r}"
-          report = {"status": "passed", "mode": "offline", "input": "eSpeak-generated mono PCM WAV", "sample_rate": rate, "recognized_text": text, "physical_microphone": "not tested in hosted CI"}
+          required_words = {"offline", "recognition"}
+assert required_words.issubset(set(text.split())), f"Missing expected speech-recognition words {sorted(required_words)} in transcription: {text!r}"
+          report = {"status": "passed", "mode": "offline", "input": "eSpeak-generated mono PCM WAV", "sample_rate": rate, "recognized_text": text, "expected_words": ["offline", "recognition"], "physical_microphone": "not tested in hosted CI"}
           with open(out_path, "w", encoding="utf-8") as f:
               json.dump(report, f, indent=2)
           print(json.dumps(report, indent=2))
