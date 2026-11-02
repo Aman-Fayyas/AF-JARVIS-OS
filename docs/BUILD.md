@@ -2,7 +2,7 @@
 
 ## What this environment validated
 
-The generated live-build tree, required assets, shell syntax, XML and package list structure have been checked. An actual ISO build was not possible in the original restricted workspace: it lacked effective mount capabilities, live-build/debootstrap/QEMU and permitted AF_UNIX sockets. No bootable image or VM boot result is claimed until a build artifact is produced and tested.
+The original restricted workspace could not build or boot an ISO. Since then, the minimal-hardware-validation branch has successfully built a Debian 13 amd64 ISO in hosted CI and booted it in BIOS and UEFI QEMU. The latest normal-login workflow also passed password rejection, desktop startup and Core recovery checks. The CI ISO was ephemeral: the uploaded artifact contains evidence and a checksum, not the ISO binary. The separate manually dispatched ISO artifact workflow has not yet been run. See docs/STATUS.md for exact run IDs and limits.
 
 The script prepares without root using `--prepare`. A real build requires a dedicated **Debian 13 amd64** VM or machine with root, mount and chroot privileges. Budget substantial free disk space (at least 15 GB) and internet access to Debian mirrors. Never use your Windows drive as the build target.
 
