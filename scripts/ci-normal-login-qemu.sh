@@ -136,8 +136,9 @@ PY
     # Test user-service failure and recovery in the disposable guest only.
     guest_ssh() {
       local command="$1"
-      SSHPASS="$PASSWORD" sshpass -e ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 jarvis@127.0.0.1 \\
-        "uid=\\$(id -u); export XDG_RUNTIME_DIR=\\\"/run/user/\\$uid\\\"; export DBUS_SESSION_BUS_ADDRESS=\\\"unix:path=\\$XDG_RUNTIME_DIR/bus\\\"; export DISPLAY=:0; $command"
+      # UID 1000 is asserted by the guest diagnostic JSON.
+      # A plain remote command avoids nested shell-escape ambiguity.
+      SSHPASS="$PASSWORD" sshpass -e ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 jarvis@127.0.0.1 "export XDG_RUNTIME_DIR=/run/user/1000; export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus; export DISPLAY=:0; $command"
     }
     guest_ssh 'systemctl --user stop jarvis-core.service && ! systemctl --user is-active --quiet jarvis-core.service'
     CORE_OFFLINE_SEEN=0
