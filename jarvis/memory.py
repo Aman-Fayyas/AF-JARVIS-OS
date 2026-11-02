@@ -308,7 +308,10 @@ class Memory:
             for leftover in self.directory.glob(pattern):
                 leftover.unlink(missing_ok=True)
         self._fsync_directory(self.directory)
-        self.backup_error = None
+        # Publish a clean empty snapshot immediately. If this fails, the
+        # helper removes the old snapshot rather than allowing deleted data
+        # to reappear during a later recovery.
+        self._refresh_backup_after_deletion()
 
     def prune(self, days):
         cutoff = time.time() - days * 86400
