@@ -1,5 +1,12 @@
 # 0.1.0-alpha source checkpoint
 
+## Software stability validation — 2026-11-02
+
+- Verified all four latest CI workflows on 4cca474: 35 automated tests, Debian 13 ISO build, BIOS/UEFI normal login, wrong-password rejection, Core recovery, GTK/Core integration and generated-speech Vosk (WER 0.0).
+- Corrected the QEMU Bluetooth diagnostic to resolve rfkill from /usr/sbin when the non-root login PATH omits administrative binaries; added a regression assertion.
+- Reconciled README, build, status, live-USB and Phase 3 documentation with actual evidence. Explicitly records that CI uploads evidence/checksum but not the ISO binary, and that physical HP hardware remains untested.
+
+
 ## Boot audit continuation
 
 - Verified original ZIP/source identity; retained existing architecture.
