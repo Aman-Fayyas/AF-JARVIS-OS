@@ -71,10 +71,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if self.server.behavior == 'sse-compatible':
                 # BOM + comment + CR-only line endings + a multi-line JSON data field.
-                frame = (b'\\xef\\xbb\\xbf: heartbeat\\r'
-                         b'data: {"choices": [\\r'
-                         b'data: {"delta": {"content": "SSE compatible"}, "finish_reason": null}\\r'
-                         b'data: ]}\\r\\rdata: [DONE]\\r\\r')
+                frame = (b'\xef\xbb\xbf: heartbeat\r'
+                         b'data: {"choices": [\r'
+                         b'data: {"delta": {"content": "SSE compatible"}, "finish_reason": null}\r'
+                         b'data: ]}\r\rdata: [DONE]\r\r)
                 self.wfile.write(frame)
                 self.wfile.flush()
                 return
