@@ -187,7 +187,7 @@ PY
     grep -q 'ens3:ethernet:connected' "$OUT/$MODE-network-before.txt"
     grep -q 'inet ' "$OUT/$MODE-network-before.txt"
     grep -q '^default ' "$OUT/$MODE-network-before.txt"
-    grep -Eq '^[0-9]+\\.' "$OUT/$MODE-network-before.txt"
+    grep -Eq '^[0-9]+\.' "$OUT/$MODE-network-before.txt"
     printf 'set_link net0 off\n' | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-network-link-off.txt"
     sleep 3
     printf 'set_link net0 on\n' | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-network-link-on.txt"
