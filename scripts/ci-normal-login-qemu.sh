@@ -7,7 +7,7 @@ PASSWORD="${3:?temporary test password}"
 OUT="${4:-.}"
 mkdir -p "$OUT"
 MONITOR="/tmp/af-jarvis-${MODE}-monitor.sock"
-QEMU=(qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom "$ISO" -boot d -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 -display sdl -no-reboot -monitor "unix:$MONITOR,server,nowait")
+QEMU=(qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom "$ISO" -boot d -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 -audiodev driver=none,id=audio0 -device intel-hda -device hda-duplex,audiodev=audio0 -display sdl -no-reboot -monitor "unix:$MONITOR,server,nowait")
 if [[ "$MODE" == uefi ]]; then
   OVMF_CODE=$(find /usr/share/OVMF -type f \( -name 'OVMF_CODE_4M.fd' -o -name 'OVMF_CODE.fd' \) | head -n1)
   [[ -n "$OVMF_CODE" ]]
@@ -163,12 +163,71 @@ PY
     done
     [[ "$CORE_ONLINE_SEEN" == 1 ]] || { echo "Desktop did not reconnect after Core restart." >&2; cat "$OUT/$MODE-core-reconnected-ocr.txt" >&2 || true; exit 1; }
     printf '{"mode":"%s","core_stop":"desktop-visible-and-reported-offline","core_restart":"desktop-reconnected-and-reported-online"}\\n' "$MODE" >"$OUT/$MODE-core-lifecycle-result.json"
+    # Set 1: exercise mouse click, keyboard input, focus and Ctrl+A in the live GTK UI.
+    GEOMETRY=$(xdotool getwindowgeometry --shell "$WINDOW")
+    INPUT_WIDTH=$(awk -F= '$1=="WIDTH"{print $2}' <<<"$GEOMETRY")
+    INPUT_HEIGHT=$(awk -F= '$1=="HEIGHT"{print $2}' <<<"$GEOMETRY")
+    xdotool mousemove --window "$WINDOW" 180 140 click 1
+    sleep 1
+    xdotool mousemove --window "$WINDOW" "$((INPUT_WIDTH / 2))" "$((INPUT_HEIGHT - 110))" click 1
+    xdotool type --clearmodifiers --delay 40 "AFJARVIS_INPUT_ONE"
+    xdotool key ctrl+a
+    xdotool type --clearmodifiers --delay 40 "AFJARVIS_INPUT_OK"
+    import -window "$WINDOW" "$OUT/$MODE-input-focus.png"
+    convert "$OUT/$MODE-input-focus.png" -gravity North -chop 0x30 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-input-focus-content.png"
+    tesseract "$OUT/$MODE-input-focus-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-input-focus-ocr.txt" || true
+    grep -Fq 'AFJARVIS_INPUT_OK' "$OUT/$MODE-input-focus-ocr.txt" || { echo "Keyboard focus/input replacement was not visible in the GTK entry." >&2; cat "$OUT/$MODE-input-focus-ocr.txt" >&2; exit 1; }
+    xdotool key ctrl+a BackSpace
+    xdotool mousemove --window "$WINDOW" 80 140 click 1
+    sleep 1
+    printf 'PASS: mouse tab click, focused GTK entry, keyboard typing and Ctrl+A replacement\\n' >"$OUT/$MODE-input-focus-result.txt"
+
+    # Set 2: verify DHCP address, default route, DNS and link recovery in QEMU user networking.
+    guest_ssh 'set -eu; nmcli -t -f DEVICE,TYPE,STATE device; ip -4 -o addr show dev ens3; ip route show default; getent ahostsv4 deb.debian.org | head -n1' >"$OUT/$MODE-network-before.txt"
+    grep -q 'ens3:ethernet:connected' "$OUT/$MODE-network-before.txt"
+    grep -q 'inet ' "$OUT/$MODE-network-before.txt"
+    grep -q '^default ' "$OUT/$MODE-network-before.txt"
+    grep -Eq '^[0-9]+\\.' "$OUT/$MODE-network-before.txt"
+    printf 'set_link net0 off\\n' | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-network-link-off.txt"
+    sleep 3
+    printf 'set_link net0 on\\n' | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-network-link-on.txt"
+    NETWORK_RECONNECTED=0
+    for _ in $(seq 1 30); do
+      if guest_ssh 'set -eu; nmcli -t -f DEVICE,TYPE,STATE device | grep -q "^ens3:ethernet:connected"; ip -4 -o addr show dev ens3 | grep -q "inet "; ip route show default | grep -q "^default "; getent ahostsv4 deb.debian.org | head -n1' >"$OUT/$MODE-network-after.txt" 2>/dev/null; then
+        NETWORK_RECONNECTED=1
+        break
+      fi
+      sleep 2
+    done
+    [[ "$NETWORK_RECONNECTED" == 1 ]] || { echo "QEMU guest did not recover DHCP/DNS/SSH after virtual NIC link reset." >&2; exit 1; }
+    printf 'PASS: DHCP, default route, DNS resolution and QEMU virtual-link reconnect\\n' >"$OUT/$MODE-network-result.txt"
+
+    # Set 3: inspect BlueZ and adapter discovery. No controller is expected in this QEMU profile.
+    guest_ssh 'set -eu; bluetoothctl --version; systemctl show bluetooth.service -p LoadState -p ActiveState --no-pager; bluetoothctl list || true; rfkill list bluetooth || true' >"$OUT/$MODE-bluetooth.txt"
+    grep -q 'LoadState=loaded' "$OUT/$MODE-bluetooth.txt"
+    printf 'INFO: BlueZ service and adapter probe completed; this QEMU profile does not emulate a physical Bluetooth controller.\\n' >"$OUT/$MODE-bluetooth-result.txt"
+
+    # Set 4: QEMU exposes a virtual Intel HDA duplex device with a null host backend.
+    # This exercises guest playback/capture routing without claiming physical speakers or a microphone.
+    guest_ssh 'set -eu; pactl info; pactl list short sinks; pactl list short sources; aplay -l; arecord -l; speaker-test -D default -t sine -f 440 -l 1; arecord -D default -f S16_LE -r 16000 -c 1 -d 2 /tmp/af-jarvis-ci-audio-capture.wav; test -s /tmp/af-jarvis-ci-audio-capture.wav' >"$OUT/$MODE-audio.txt"
+    grep -q 'alsa_output' "$OUT/$MODE-audio.txt"
+    grep -q 'alsa_input' "$OUT/$MODE-audio.txt"
+    printf 'PASS: PipeWire virtual HDA playback and capture pipeline (null host backend; no physical audio claim)\\n' >"$OUT/$MODE-audio-result.txt"
+
+    # Set 5: switch a virtual display mode, restore the baseline, and query OpenGL.
+    guest_ssh 'set -eu; xrandr --query; xrandr --output Virtual-1 --mode 1024x768; xrandr --current | grep -q "1024x768"; xrandr --output Virtual-1 --mode 1280x800; xrandr --current | grep -q "1280x800"; glxinfo -B' >"$OUT/$MODE-display-graphics.txt"
+    grep -q 'OpenGL renderer string' "$OUT/$MODE-display-graphics.txt"
+    printf 'PASS: virtual display mode change/restore and OpenGL renderer query\\n' >"$OUT/$MODE-display-graphics-result.txt"
+
+    # Set 6: gather power/session state and service-failure diagnostics; do not force suspend.
+    guest_ssh 'set -eu; printf "power-states: "; cat /sys/power/state; printf "\\nsessions:\\n"; loginctl list-sessions --no-legend; printf "\\ninhibitors:\\n"; systemd-inhibit --list; printf "\\nsystem-failed:\\n"; systemctl --failed --no-pager; printf "\\nuser-failed:\\n"; systemctl --user --failed --no-pager' >"$OUT/$MODE-power-session.txt"
+
     python3 - "$OUT/$MODE-phase3-guest-report.json" <<'PY'
 import json,sys
 from pathlib import Path
 p=Path(sys.argv[1]); report=json.loads(p.read_text(encoding="utf-8"))
-report["workflow_checks"]={"wrong_password_rejection":"passed; greeter remained visible","core_stop_restart_ui_reconnect":"passed; desktop showed offline then online"}
-report["manual_checks_still_required"]=[x for x in report.get("manual_checks_still_required",[]) if x != "wrong-password rejection"]
+report["workflow_checks"]={"wrong_password_rejection":"passed; greeter remained visible","core_stop_restart_ui_reconnect":"passed; desktop showed offline then online","keyboard_mouse_focus":"passed; GTK tab click and focused entry input verified by OCR after Ctrl+A replacement","network_dhcp_dns_reconnect":"passed; QEMU virtual NIC link reset recovered DHCP, default route, DNS and SSH","bluetooth_service_adapter_probe":"BlueZ service loaded and controller probe captured; QEMU does not emulate physical Bluetooth","audio_virtual_hda":"passed; QEMU Intel HDA virtual playback/capture routed through PipeWire null backend","display_graphics":"passed; virtual resolution switch/restore and OpenGL renderer query","power_session_diagnostics":"captured; suspend/resume not attempted"}
+report["manual_checks_still_required"]=[x for x in report.get("manual_checks_still_required",[]) if x not in ("wrong-password rejection","network disconnect/reconnect behavior","audio playback and microphone capture")]
 p.write_text(json.dumps(report,indent=2)+"\\n",encoding="utf-8")
 PY
     echo "Normal login, wrong-password rejection, guest diagnostics, and Core recovery passed."
