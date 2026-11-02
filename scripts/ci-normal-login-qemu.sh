@@ -166,10 +166,16 @@ PY
     # Set 1: exercise mouse click, keyboard input, focus and Ctrl+A in the live GTK UI.
     xdotool windowfocus --sync "$WINDOW"
     import -window "$WINDOW" "$OUT/$MODE-input-before.png"
-    read -r INPUT_WIDTH INPUT_HEIGHT < <(identify -format '%w %h\n' "$OUT/$MODE-input-before.png")
-    { printf 'captured_window=%sx%s\n' "$INPUT_WIDTH" "$INPUT_HEIGHT"; xdotool getwindowgeometry --shell "$WINDOW"; } >"$OUT/$MODE-input-window-geometry.txt"
-    ASSISTANT_X=$((INPUT_WIDTH * 14 / 100))
-    ASSISTANT_Y=$((INPUT_HEIGHT * 17 / 100))
+    SCREENSHOT_GEOMETRY=$(identify -format '%wx%h' "$OUT/$MODE-input-before.png")
+    GEOMETRY=$(xdotool getwindowgeometry --shell "$WINDOW")
+    INPUT_WIDTH=$(awk -F= '$1=="WIDTH"{print $2}' <<<"$GEOMETRY")
+    INPUT_HEIGHT=$(awk -F= '$1=="HEIGHT"{print $2}' <<<"$GEOMETRY")
+    { printf 'screenshot_framebuffer=%s\nxdotool_window=%sx%s\n%s\n' "$SCREENSHOT_GEOMETRY" "$INPUT_WIDTH" "$INPUT_HEIGHT" "$GEOMETRY"; } >"$OUT/$MODE-input-window-geometry.txt"
+    # QEMU SDL scales the guest framebuffer inside the host X window. xdotool
+    # uses host-window coordinates, so calculate clicks from WINDOW geometry,
+    # not from the smaller captured guest-framebuffer screenshot.
+    ASSISTANT_X=$((INPUT_WIDTH * 20 / 100))
+    ASSISTANT_Y=$((INPUT_HEIGHT * 22 / 100))
     xdotool mousemove --sync --window "$WINDOW" "$ASSISTANT_X" "$ASSISTANT_Y" click 1
     sleep 1
     import -window "$WINDOW" "$OUT/$MODE-assistant-page.png"
@@ -177,7 +183,7 @@ PY
     tesseract "$OUT/$MODE-assistant-page-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-assistant-page-ocr.txt" || true
     grep -Eqi 'LOCAL FIRST|Send' "$OUT/$MODE-assistant-page-ocr.txt" || { echo "Mouse click did not open the Assistant page." >&2; cat "$OUT/$MODE-assistant-page-ocr.txt" >&2; exit 1; }
     PROMPT_X=$((INPUT_WIDTH / 2))
-    PROMPT_Y=$((INPUT_HEIGHT * 84 / 100))
+    PROMPT_Y=$((INPUT_HEIGHT * 92 / 100))
     xdotool mousemove --sync --window "$WINDOW" "$PROMPT_X" "$PROMPT_Y" click 1
     xdotool type --clearmodifiers --delay 40 "INPUTCHECKONE"
     xdotool key ctrl+a
@@ -187,7 +193,8 @@ PY
     tesseract "$OUT/$MODE-input-focus-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-input-focus-ocr.txt" || true
     grep -Fq 'INPUTCHECKOK' "$OUT/$MODE-input-focus-ocr.txt" || { echo "Keyboard focus/input replacement was not visible in the GTK entry." >&2; cat "$OUT/$MODE-input-focus-ocr.txt" >&2; exit 1; }
     xdotool key ctrl+a BackSpace
-    xdotool mousemove --sync --window "$WINDOW" "$((INPUT_WIDTH * 8 / 100))" "$ASSISTANT_Y" click 1
+    DASHBOARD_X=$((INPUT_WIDTH * 8 / 100))
+    xdotool mousemove --sync --window "$WINDOW" "$DASHBOARD_X" "$ASSISTANT_Y" click 1
     sleep 1
     printf 'PASS: mouse tab click, focused GTK entry, keyboard typing and Ctrl+A replacement\n' >"$OUT/$MODE-input-focus-result.txt"
 
