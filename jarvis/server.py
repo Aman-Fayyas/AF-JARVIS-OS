@@ -96,6 +96,10 @@ def main():
         if path.exists():
             path.unlink()
         core = Core(args.config_dir, args.data_dir)
+        if core.memory.recovered_from_backup:
+            print("WARNING: restored the memory database from its last valid backup; damaged file quarantined", flush=True)
+        if core.memory.backup_error:
+            print(f"WARNING: startup memory backup unavailable ({core.memory.backup_error})", flush=True)
         with Server(str(path), Handler) as server:
             path.chmod(0o600)
             server.core = core
@@ -109,6 +113,10 @@ def main():
             finally:
                 for token in list(core.active.values()):
                     token.cancel()
+                try:
+                    core.memory.backup()
+                except Exception as error:
+                    print(f"WARNING: shutdown memory backup failed ({type(error).__name__})", flush=True)
                 path.unlink(missing_ok=True)
 
 
