@@ -166,7 +166,9 @@ PY
     # Set 1: send an absolute USB-tablet pointer event through QEMU's monitor.
     # This tests the guest HID mouse path without relying on SDL/Xvfb window scaling.
     printf 'info mice\n' | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-mouse-devices.txt"
-    MOUSE_INDEX=$(sed -nE 's/.*Mouse #([0-9]+): QEMU USB Tablet.*/\1/p' "$OUT/$MODE-mouse-devices.txt" | head -n1)
+    # QEMU 8.2 reports this device as "QEMU HID Tablet (absolute)" in info mice.
+    # Accept the older USB Tablet label too, while still selecting the absolute tablet.
+    MOUSE_INDEX=$(sed -nE 's/.*Mouse #([0-9]+): QEMU (USB|HID) Tablet.*/\1/p' "$OUT/$MODE-mouse-devices.txt" | head -n1)
     [[ -n "$MOUSE_INDEX" ]] || { echo "QEMU USB tablet was not enumerated by the monitor." >&2; cat "$OUT/$MODE-mouse-devices.txt" >&2; exit 1; }
     # Guest display is 1280x800; QEMU absolute pointer coordinates use 0..32767.
     MOUSE_X=$((183 * 32767 / 1280))
