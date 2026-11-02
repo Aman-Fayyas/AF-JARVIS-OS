@@ -38,7 +38,7 @@ class BootAssetsTests(unittest.TestCase):
 
     def test_qemu_keyboard_tab_traversal_targets_prompt_entry(self):
         script = (ROOT / 'scripts/ci-normal-login-qemu.sh').read_text()
-        sequence = 'xdotool key Tab Tab Tab'
+        sequence = 'xdotool key Tab Tab Tab Tab'
         self.assertIn(sequence, script)
         self.assertIn('-display sdl -no-reboot', script)
         self.assertIn('screendump %s', script)
@@ -47,7 +47,7 @@ class BootAssetsTests(unittest.TestCase):
         self.assertIn('capture_guest "$MODE-input-focus"', script)
         self.assertNotIn('import -window "$WINDOW"', script)
         self.assertIn('qemu-window-geometry.txt', script)
-        self.assertNotIn('xdotool key Tab Tab Tab Tab', script)
+        self.assertNotIn('xdotool key Tab Tab Tab Tab Tab', script)
         self.assertLess(script.index(sequence), script.index('xdotool type --clearmodifiers --delay 40 "INPUTCHECKONE"'))
 
     def test_session_starts_openbox_when_user_services_fail(self):

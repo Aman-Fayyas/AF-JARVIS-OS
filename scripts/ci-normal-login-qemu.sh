@@ -201,7 +201,8 @@ PY
 
     # After selecting the Assistant notebook tab, focus advances through the
     # route selector and privacy checkbox before reaching the prompt entry.
-    xdotool key Tab Tab Tab
+    # The chat transcript is also focusable, so four Tabs reach the prompt entry.
+    xdotool key Tab Tab Tab Tab
     sleep 1
     xdotool type --clearmodifiers --delay 40 "INPUTCHECKONE"
     xdotool key ctrl+a
