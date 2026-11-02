@@ -120,8 +120,8 @@ for _ in $(seq 1 90); do
     # Collect read-only diagnostics from the disposable guest over a loopback-only
     # QEMU user-network forward. The SSH server exists only in this CI image.
     SSH_READY=0
-    for _ in $(seq 1 90); do
-      if SSHPASS="$PASSWORD" sshpass -e ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 jarvis@127.0.0.1 'true' >/dev/null 2>&1; then
+    for _ in $(seq 1 30); do
+      if timeout 8s env SSHPASS="$PASSWORD" sshpass -e ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 -o ServerAliveInterval=3 -o ServerAliveCountMax=1 jarvis@127.0.0.1 'true' >/dev/null 2>&1; then
         SSH_READY=1
         break
       fi
@@ -129,7 +129,10 @@ for _ in $(seq 1 90); do
       sleep 2
     done
     [[ "$SSH_READY" == 1 ]] || { echo "Guest SSH unavailable; diagnostics not collected." >&2; exit 1; }
-    SSHPASS="$PASSWORD" sshpass -e ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null jarvis@127.0.0.1 \
+    timeout --signal=TERM --kill-after=5s 45s env SSHPASS="$PASSWORD" sshpass -e ssh \
+      -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      -o ConnectTimeout=5 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 \
+      jarvis@127.0.0.1 \
       'uid=$(id -u); export XDG_RUNTIME_DIR="/run/user/$uid"; export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"; export DISPLAY=:0; python3 /usr/local/bin/af-jarvis-phase3-check' \
       >"$OUT/$MODE-phase3-guest-report.json"
     python3 - "$OUT/$MODE-phase3-guest-report.json" <<'PY'
@@ -146,9 +149,23 @@ PY
     # Test user-service failure and recovery in the disposable guest only.
     guest_ssh() {
       local command="$1"
-      # UID 1000 is asserted by the guest diagnostic JSON.
-      # A plain remote command avoids nested shell-escape ambiguity.
-      SSHPASS="$PASSWORD" sshpass -e ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 jarvis@127.0.0.1 "export XDG_RUNTIME_DIR=/run/user/1000; export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus; export DISPLAY=:0; $command"
+      local started=$SECONDS rc=0
+      # Every guest command is bounded. SSH ConnectTimeout alone only bounds
+      # connection setup; it does not stop a remote systemd/DBus command that
+      # accepts the connection and then never returns.
+      echo "::group::[$MODE] guest command (45s cap): $command"
+      if timeout --signal=TERM --kill-after=5s 45s env SSHPASS="$PASSWORD" sshpass -e ssh \
+        -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -o ConnectTimeout=5 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 \
+        jarvis@127.0.0.1 \
+        "export XDG_RUNTIME_DIR=/run/user/1000; export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus; export DISPLAY=:0; $command"; then
+        echo "Guest command completed in $((SECONDS-started))s."
+      else
+        rc=$?
+        echo "::error::[$MODE] guest command failed or exceeded 45s (exit $rc) after $((SECONDS-started))s: $command"
+      fi
+      echo "::endgroup::"
+      return "$rc"
     }
     guest_ssh 'systemctl --user stop jarvis-core.service && ! systemctl --user is-active --quiet jarvis-core.service'
     CORE_OFFLINE_SEEN=0
