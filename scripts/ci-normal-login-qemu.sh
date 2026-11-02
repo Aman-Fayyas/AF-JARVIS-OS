@@ -165,36 +165,58 @@ PY
     printf '{"mode":"%s","core_stop":"desktop-visible-and-reported-offline","core_restart":"desktop-reconnected-and-reported-online"}\n' "$MODE" >"$OUT/$MODE-core-lifecycle-result.json"
     # Set 1: exercise mouse click, keyboard input, focus and Ctrl+A in the live GTK UI.
     xdotool windowfocus --sync "$WINDOW"
+    xdotool windowraise "$WINDOW" 2>/dev/null || true
     import -window "$WINDOW" "$OUT/$MODE-input-before.png"
     SCREENSHOT_GEOMETRY=$(identify -format '%wx%h' "$OUT/$MODE-input-before.png")
     GEOMETRY=$(xdotool getwindowgeometry --shell "$WINDOW")
     INPUT_WIDTH=$(awk -F= '$1=="WIDTH"{print $2}' <<<"$GEOMETRY")
     INPUT_HEIGHT=$(awk -F= '$1=="HEIGHT"{print $2}' <<<"$GEOMETRY")
-    { printf 'screenshot_framebuffer=%s\nxdotool_window=%sx%s\n%s\n' "$SCREENSHOT_GEOMETRY" "$INPUT_WIDTH" "$INPUT_HEIGHT" "$GEOMETRY"; } >"$OUT/$MODE-input-window-geometry.txt"
-    # QEMU SDL scales the guest framebuffer inside the host X window. xdotool
-    # uses host-window coordinates, so calculate clicks from WINDOW geometry,
-    # not from the smaller captured guest-framebuffer screenshot.
-    ASSISTANT_X=$((INPUT_WIDTH * 20 / 100))
-    ASSISTANT_Y=$((INPUT_HEIGHT * 22 / 100))
-    xdotool mousemove --sync --window "$WINDOW" "$ASSISTANT_X" "$ASSISTANT_Y" click 1
+    WINDOW_X=$(awk -F= '$1=="X"{print $2}' <<<"$GEOMETRY")
+    WINDOW_Y=$(awk -F= '$1=="Y"{print $2}' <<<"$GEOMETRY")
+    DISPLAY_GEOMETRY=$(xdotool getdisplaygeometry)
+    MOUSE_BEFORE=$(xdotool getmouselocation --shell)
+    { printf 'screenshot_framebuffer=%s\nxdotool_window=%sx%s+%s+%s\ndisplay=%s\nmouse_before:\n%s\n' "$SCREENSHOT_GEOMETRY" "$INPUT_WIDTH" "$INPUT_HEIGHT" "$WINDOW_X" "$WINDOW_Y" "$DISPLAY_GEOMETRY" "$MOUSE_BEFORE"; } >"$OUT/$MODE-input-window-geometry.txt"
+
+    # The SDL window and captured framebuffer can use different coordinate
+    # spaces. Try the measured framebuffer coordinates, scaled window
+    # coordinates, and absolute X coordinates derived from the window origin.
+    # Accept only a click that visibly switches the GTK notebook to Assistant.
+    ASSISTANT_OPEN=0
+    for COORDS in "window:180:140" "window:240:175" "window:256:176" \
+                  "screen:180:140" "screen:$((WINDOW_X + 180)):$((WINDOW_Y + 140))" \
+                  "screen:$((WINDOW_X + 240)):$((WINDOW_Y + 175))" \
+                  "screen:$((WINDOW_X + 256)):$((WINDOW_Y + 176))"; do
+      IFS=: read -r COORD_MODE CLICK_X CLICK_Y <<<"$COORDS"
+      if [[ "$COORD_MODE" == "window" ]]; then
+        xdotool mousemove --sync --window "$WINDOW" "$CLICK_X" "$CLICK_Y"
+      else
+        xdotool mousemove --sync "$CLICK_X" "$CLICK_Y"
+      fi
+      xdotool click 1
+      sleep 1
+      import -window "$WINDOW" "$OUT/$MODE-assistant-page.png"
+      convert "$OUT/$MODE-assistant-page.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-assistant-page-content.png"
+      tesseract "$OUT/$MODE-assistant-page-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-assistant-page-ocr.txt" || true
+      if grep -Eqi 'LOCAL FIRST|Send' "$OUT/$MODE-assistant-page-ocr.txt"; then
+        ASSISTANT_OPEN=1
+        printf 'mode=%s,x=%s,y=%s\n' "$COORD_MODE" "$CLICK_X" "$CLICK_Y" >"$OUT/$MODE-mouse-click-result.txt"
+        break
+      fi
+    done
+    [[ "$ASSISTANT_OPEN" == 1 ]] || { echo "Mouse click could not open the Assistant page in any calibrated coordinate mode." >&2; cat "$OUT/$MODE-input-window-geometry.txt" >&2; cat "$OUT/$MODE-assistant-page-ocr.txt" >&2; exit 1; }
+
+    # Keyboard Tab traversal reaches the Assistant prompt without assuming
+    # that the guest framebuffer and host X window share the same scale.
+    xdotool key Tab Tab Tab Tab
     sleep 1
-    import -window "$WINDOW" "$OUT/$MODE-assistant-page.png"
-    convert "$OUT/$MODE-assistant-page.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-assistant-page-content.png"
-    tesseract "$OUT/$MODE-assistant-page-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-assistant-page-ocr.txt" || true
-    grep -Eqi 'LOCAL FIRST|Send' "$OUT/$MODE-assistant-page-ocr.txt" || { echo "Mouse click did not open the Assistant page." >&2; cat "$OUT/$MODE-assistant-page-ocr.txt" >&2; exit 1; }
-    PROMPT_X=$((INPUT_WIDTH / 2))
-    PROMPT_Y=$((INPUT_HEIGHT * 92 / 100))
-    xdotool mousemove --sync --window "$WINDOW" "$PROMPT_X" "$PROMPT_Y" click 1
     xdotool type --clearmodifiers --delay 40 "INPUTCHECKONE"
     xdotool key ctrl+a
     xdotool type --clearmodifiers --delay 40 "INPUTCHECKOK"
     import -window "$WINDOW" "$OUT/$MODE-input-focus.png"
     convert "$OUT/$MODE-input-focus.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-input-focus-content.png"
     tesseract "$OUT/$MODE-input-focus-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-input-focus-ocr.txt" || true
-    grep -Fq 'INPUTCHECKOK' "$OUT/$MODE-input-focus-ocr.txt" || { echo "Keyboard focus/input replacement was not visible in the GTK entry." >&2; cat "$OUT/$MODE-input-focus-ocr.txt" >&2; exit 1; }
+    grep -Fq 'INPUTCHECKOK' "$OUT/$MODE-input-focus-ocr.txt" || { echo "Keyboard Tab focus/input replacement was not visible in the GTK entry." >&2; cat "$OUT/$MODE-input-focus-ocr.txt" >&2; exit 1; }
     xdotool key ctrl+a BackSpace
-    DASHBOARD_X=$((INPUT_WIDTH * 8 / 100))
-    xdotool mousemove --sync --window "$WINDOW" "$DASHBOARD_X" "$ASSISTANT_Y" click 1
     sleep 1
     printf 'PASS: mouse tab click, focused GTK entry, keyboard typing and Ctrl+A replacement\n' >"$OUT/$MODE-input-focus-result.txt"
 
