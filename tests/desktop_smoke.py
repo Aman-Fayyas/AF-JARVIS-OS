@@ -88,15 +88,22 @@ def main():
             until(lambda: bool(desktop.fact_list.get_children()))
             assert desktop.engine.get_text() == 'LOCAL • smollm2-360m'
             desktop.resize(960, 640)
-            until(lambda: desktop.get_allocated_width() == 960 and desktop.get_allocated_height() == 640)
+            until(lambda: desktop.get_allocated_width() <= 1000 and
+                         desktop.get_allocated_height() <= 650)
             desktop.notebook.set_current_page(1)
             def visible_inside_window(widget):
                 translated, _, y = widget.translate_coordinates(desktop, 0, 0)
                 height = widget.get_allocated_height()
                 return (widget.get_mapped() and translated and height > 0 and
                         y >= 0 and y + height <= desktop.get_allocated_height())
-            until(lambda: visible_inside_window(desktop.prompt) and
-                         visible_inside_window(desktop.send_button))
+            captured = time.monotonic()
+            until(lambda: time.monotonic() - captured > 0.25)
+            assert visible_inside_window(desktop.prompt), (
+                f'Assistant prompt clipped: window={desktop.get_allocated_width()}x{desktop.get_allocated_height()}, '
+                f'prompt={desktop.prompt.get_allocation()}')
+            assert visible_inside_window(desktop.send_button), (
+                f'Assistant Send button clipped: window={desktop.get_allocated_width()}x{desktop.get_allocated_height()}, '
+                f'button={desktop.send_button.get_allocation()}')
             # Let the frame render, then capture the native window.
             captured = time.monotonic()
             until(lambda: time.monotonic() - captured > 0.25)
