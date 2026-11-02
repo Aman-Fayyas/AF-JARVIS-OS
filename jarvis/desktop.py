@@ -225,7 +225,13 @@ class Desktop(Gtk.Window):
         self.buffer = self.view.get_buffer()
         self.buffer.create_tag('user', foreground='#72e5ff', weight=700)
         self.buffer.create_tag('muted', foreground='#a1b7cc')
-        page.pack_start(scroll(self.view), True, True, 0)
+        history = scroll(self.view)
+        # Keep the prompt and actions visible on compact laptop displays; the
+        # conversation transcript scrolls instead of pushing controls below the viewport.
+        history.set_min_content_height(120)
+        history.set_max_content_height(220)
+        history.set_propagate_natural_height(True)
+        page.pack_start(history, True, True, 0)
         self.prompt = Gtk.Entry(placeholder_text='Ask JARVIS or type “show RAM usage”…')
         self.prompt.connect('activate', self.send)
         page.pack_start(self.prompt, False, False, 0)
