@@ -202,7 +202,7 @@ class CoreTests(unittest.TestCase):
         recovered = Memory(directory)
         self.assertEqual(recovered.facts(), [])
 
-    def test_clear_invalidates_backup_to_prevent_deleted_data_resurrection(self):
+    def test_clear_refreshes_backup_without_resurrecting_deleted_data(self):
         directory = self.root / 'clear-memory'
         memory = Memory(directory)
         memory.remember('This must not return after clear.')
@@ -211,13 +211,14 @@ class CoreTests(unittest.TestCase):
         stale_backup.write_bytes(b'old snapshot')
         quarantined.write_bytes(b'old damaged database')
         memory.clear()
-        self.assertFalse(memory.backup_path.exists())
+        self.assertTrue(memory.backup_path.is_file())
         self.assertFalse(stale_backup.exists())
         self.assertFalse(quarantined.exists())
+        self.assertEqual(memory.facts(), [])
         memory.path.write_bytes(b'corrupt after clear')
-        with self.assertRaises(sqlite3.DatabaseError):
-            Memory(directory)
-        self.assertEqual(memory.path.read_bytes(), b'corrupt after clear')
+        recovered = Memory(directory)
+        self.assertTrue(recovered.recovered_from_backup)
+        self.assertEqual(recovered.facts(), [])
 
     def test_future_memory_schema_is_rejected_without_rewriting_it(self):
         directory = self.root / 'future-memory'
