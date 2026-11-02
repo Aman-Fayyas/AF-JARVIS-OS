@@ -7,7 +7,7 @@ PASSWORD="${3:?temporary test password}"
 OUT="${4:-.}"
 mkdir -p "$OUT"
 MONITOR="/tmp/af-jarvis-${MODE}-monitor.sock"
-QEMU=(qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom "$ISO" -boot d -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 -usb -device usb-tablet -audiodev driver=none,id=audio0 -device intel-hda -device hda-duplex,audiodev=audio0 -display gtk,full-screen=on,zoom-to-fit=on,show-menubar=off -no-reboot -monitor "unix:$MONITOR,server,nowait")
+QEMU=(qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom "$ISO" -boot d -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 -usb -device usb-tablet -audiodev driver=none,id=audio0 -device intel-hda -device hda-duplex,audiodev=audio0 -display sdl -no-reboot -monitor "unix:$MONITOR,server,nowait")
 if [[ "$MODE" == uefi ]]; then
   OVMF_CODE=$(find /usr/share/OVMF -type f \( -name 'OVMF_CODE_4M.fd' -o -name 'OVMF_CODE.fd' \) | head -n1)
   [[ -n "$OVMF_CODE" ]]
@@ -31,20 +31,20 @@ for _ in $(seq 1 90); do
   sleep 2
 done
 [[ -n "$WINDOW" ]] || { echo "QEMU display window did not appear" >&2; exit 1; }
-# Require the GTK fullscreen surface to expose the complete 1280x800 CI
-# framebuffer; the smaller SDL window clipped the Assistant prompt.
+# The host SDL window may be smaller than the guest framebuffer. Record its
+# geometry, but capture screenshots through the QEMU monitor so OCR sees the
+# complete guest display rather than a clipped host window.
 xdotool getwindowgeometry --shell "$WINDOW" >"$OUT/$MODE-qemu-window-geometry.txt"
-WINDOW_WIDTH=$(sed -n 's/^WIDTH=//p' "$OUT/$MODE-qemu-window-geometry.txt")
-WINDOW_HEIGHT=$(sed -n 's/^HEIGHT=//p' "$OUT/$MODE-qemu-window-geometry.txt")
-if [[ "$WINDOW_WIDTH" -lt 1280 || "$WINDOW_HEIGHT" -lt 800 ]]; then
-  echo "QEMU display window is smaller than the 1280x800 test framebuffer." >&2
-  cat "$OUT/$MODE-qemu-window-geometry.txt" >&2
-  exit 1
-fi
+capture_guest() {
+  local name="$1"
+  local ppm="$OUT/$name.ppm"
+  printf 'screendump %s\\n' "$ppm" | socat - UNIX-CONNECT:"$MONITOR" >/dev/null
+  convert "$ppm" "$OUT/$name.png"
+}
 xdotool windowfocus --sync "$WINDOW"
 BOOT_MENU_SEEN=0
 for _ in $(seq 1 45); do
-  import -window "$WINDOW" "$OUT/$MODE-boot-menu.png"
+  capture_guest "$MODE-boot-menu"
   tesseract "$OUT/$MODE-boot-menu.png" stdout 2>/dev/null >"$OUT/$MODE-boot-menu-ocr.txt" || true
   if grep -Eqi 'enter:[[:space:]]*boot|Live system|Start installer' "$OUT/$MODE-boot-menu-ocr.txt"; then
     BOOT_MENU_SEEN=1
@@ -58,7 +58,7 @@ printf 'sendkey ret\n' | socat - UNIX-CONNECT:"$MONITOR"
 GREETER_SEEN=0
 for _ in $(seq 1 90); do
   kill -0 "$QEMU_PID"
-  import -window "$WINDOW" "$OUT/$MODE-login-greeter.png"
+  capture_guest "$MODE-login-greeter"
   convert "$OUT/$MODE-login-greeter.png" -gravity North -chop 0x30 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-login-content.png"
   tesseract "$OUT/$MODE-login-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-greeter-ocr.txt" || true
   if grep -Eqi 'Enter your password|Log In|Username' "$OUT/$MODE-greeter-ocr.txt"; then
@@ -78,7 +78,7 @@ xdotool type --clearmodifiers --delay 45 "definitely-not-the-password"
 sleep 1
 xdotool key Return
 sleep 5
-import -window "$WINDOW" "$OUT/$MODE-wrong-password.png"
+capture_guest "$MODE-wrong-password"
 convert "$OUT/$MODE-wrong-password.png" -gravity North -chop 0x30 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-wrong-password-content.png"
 tesseract "$OUT/$MODE-wrong-password-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-wrong-password-ocr.txt" || true
 if ! grep -Eqi 'Log In|Cancel|Enter your password|Password|Try again|Authentication' "$OUT/$MODE-wrong-password-ocr.txt"; then
@@ -103,7 +103,7 @@ xdotool key Return
 sleep 3
 for _ in $(seq 1 90); do
   kill -0 "$QEMU_PID"
-  import -window "$WINDOW" "$OUT/$MODE-after-login.png"
+  capture_guest "$MODE-after-login"
   convert "$OUT/$MODE-after-login.png" -gravity North -chop 0x30 -colorspace Gray -resize 200% -contrast-stretch 1%x1% "$OUT/$MODE-screen-content.png"
   tesseract "$OUT/$MODE-screen-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-screen-ocr.txt" || true
   OCR="$OUT/$MODE-screen-ocr.txt"
@@ -154,7 +154,7 @@ PY
     CORE_OFFLINE_SEEN=0
     for _ in $(seq 1 30); do
       kill -0 "$QEMU_PID"
-      import -window "$WINDOW" "$OUT/$MODE-core-offline.png"
+      capture_guest "$MODE-core-offline"
       convert "$OUT/$MODE-core-offline.png" -gravity North -chop 0x30 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-core-offline-content.png"
       tesseract "$OUT/$MODE-core-offline-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-core-offline-ocr.txt" || true
       if grep -Eqi 'Core offline' "$OUT/$MODE-core-offline-ocr.txt" && grep -Eqi 'Dashboard' "$OUT/$MODE-core-offline-ocr.txt"; then CORE_OFFLINE_SEEN=1; break; fi
@@ -165,7 +165,7 @@ PY
     CORE_ONLINE_SEEN=0
     for _ in $(seq 1 30); do
       kill -0 "$QEMU_PID"
-      import -window "$WINDOW" "$OUT/$MODE-core-reconnected.png"
+      capture_guest "$MODE-core-reconnected"
       convert "$OUT/$MODE-core-reconnected.png" -gravity North -chop 0x30 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-core-reconnected-content.png"
       tesseract "$OUT/$MODE-core-reconnected-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-core-reconnected-ocr.txt" || true
       if grep -Eqi 'Core online' "$OUT/$MODE-core-reconnected-ocr.txt" && grep -Eqi 'Dashboard' "$OUT/$MODE-core-reconnected-ocr.txt"; then CORE_ONLINE_SEEN=1; break; fi
@@ -187,7 +187,7 @@ PY
     xdotool click 1
     printf 'info mice\n' | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-mouse-click-monitor.txt"
     sleep 1
-    import -window "$WINDOW" "$OUT/$MODE-assistant-page.png"
+    capture_guest "$MODE-assistant-page"
     convert "$OUT/$MODE-assistant-page.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-assistant-page-content.png"
     tesseract "$OUT/$MODE-assistant-page-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-assistant-page-ocr.txt" || true
     if ! grep -Eqi 'Sensitive: keep local' "$OUT/$MODE-assistant-page-ocr.txt"; then
@@ -206,7 +206,7 @@ PY
     xdotool type --clearmodifiers --delay 40 "INPUTCHECKONE"
     xdotool key ctrl+a
     xdotool type --clearmodifiers --delay 40 "INPUTCHECKOK"
-    import -window "$WINDOW" "$OUT/$MODE-input-focus.png"
+    capture_guest "$MODE-input-focus"
     convert "$OUT/$MODE-input-focus.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-input-focus-content.png"
     tesseract "$OUT/$MODE-input-focus-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-input-focus-ocr.txt" || true
     grep -Fq 'INPUTCHECKOK' "$OUT/$MODE-input-focus-ocr.txt" || { echo "Keyboard Tab focus/input replacement was not visible in the GTK entry." >&2; cat "$OUT/$MODE-input-focus-ocr.txt" >&2; exit 1; }
