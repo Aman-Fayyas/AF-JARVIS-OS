@@ -114,11 +114,42 @@ def main():
                        'unix_permissions': 'UNTESTED here' if loopback else 'TESTED 0600',
                        'core': call({'method': 'status'})['value']['core_memory'], 'desktop_with_test_harness': resource(os.getpid()),
                        'whole_os_idle_ram': 'UNMEASURED: no booted AF JARVIS OS VM/hardware'}
+            conversation_id = desktop.conversation
             core.terminate()
             core.wait(timeout=4)
             desktop.status()
             until(lambda: 'offline' in desktop.connection.get_text())
             assert desktop.get_visible()
+            if not loopback:
+                backup = Path(os.environ['XDG_DATA_HOME']) / 'af-jarvis/memory.sqlite3.bak'
+                assert backup.is_file(), 'Core did not publish a clean-shutdown SQLite backup'
+                assert backup.stat().st_mode & 0o777 == 0o600, 'SQLite backup permissions are not private'
+
+                # Restart the actual Core process against the same XDG data
+                # directory and prove that committed history/facts survive it.
+                core = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    if core.poll() is not None:
+                        raise AssertionError(core.communicate())
+                    try:
+                        if call({'method': 'status'})['type'] == 'result':
+                            break
+                    except (OSError, RuntimeError):
+                        time.sleep(0.05)
+                else:
+                    raise AssertionError('Core did not recover after restart')
+
+                restored_history = call({'method': 'history', 'conversation': conversation_id})['value']
+                restored_facts = call({'method': 'facts'})['value']
+                assert len(restored_history) == 2, restored_history
+                assert any(f['content'] == 'Aman builds Project ReLife.' for f in restored_facts), restored_facts
+                results['checks'].append('clean-shutdown SQLite backup and Core restart preserve conversation/facts')
+
+                core.terminate()
+                core.wait(timeout=4)
+                desktop.status()
+                until(lambda: 'offline' in desktop.connection.get_text())
             # Exercise Gio application launching with Core stopped. This is a
             # harmless utility fixture, not a claim about Firefox/PCManFM boots.
             launcher = directory / 'launch-utility'
