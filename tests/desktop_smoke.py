@@ -89,10 +89,10 @@ def main():
             assert desktop.engine.get_text() == 'LOCAL • smollm2-360m'
             desktop.notebook.set_current_page(1)
             def visible_inside_window(widget):
-                translated, _, y = widget.translate_coordinates(desktop, 0, 0)
+                x, y = widget.translate_coordinates(desktop, 0, 0)
                 height = widget.get_allocated_height()
-                return (widget.get_mapped() and translated and height > 0 and
-                        y >= 0 and y + height <= desktop.get_allocated_height())
+                return (widget.get_mapped() and height > 0 and x >= 0 and y >= 0 and
+                        y + height <= desktop.get_allocated_height())
             captured = time.monotonic()
             until(lambda: time.monotonic() - captured > 0.25)
             assert visible_inside_window(desktop.prompt), (
