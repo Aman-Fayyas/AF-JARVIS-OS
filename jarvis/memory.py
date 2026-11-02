@@ -51,7 +51,7 @@ class Memory:
             "file is encrypted",
         ))
 
-    def _quick_check(self, path):
+    def _integrity_check(self, path):
         path = Path(path)
         if path.is_symlink():
             raise ValueError("Memory database and backup cannot be symlinks")
@@ -60,9 +60,9 @@ class Memory:
         db = None
         try:
             db = sqlite3.connect(path, timeout=self.timeout)
-            rows = db.execute("PRAGMA quick_check").fetchall()
+            rows = db.execute("PRAGMA integrity_check").fetchall()
             if rows != [("ok",)]:
-                raise CorruptMemoryDatabase("SQLite quick_check reported an integrity failure")
+                raise CorruptMemoryDatabase("SQLite integrity_check reported an integrity failure")
         except CorruptMemoryDatabase:
             raise
         except sqlite3.DatabaseError as error:
@@ -78,7 +78,7 @@ class Memory:
     def _recover_if_needed(self):
         if self.path.exists():
             try:
-                self._quick_check(self.path)
+                self._integrity_check(self.path)
             except CorruptMemoryDatabase:
                 self._restore_backup()
         elif self.backup_path.exists():
@@ -88,7 +88,7 @@ class Memory:
         if self.backup_path.is_symlink():
             raise ValueError("Memory backup cannot be a symlink")
         try:
-            self._quick_check(self.backup_path)
+            self._integrity_check(self.backup_path)
         except (CorruptMemoryDatabase, OSError, sqlite3.Error) as error:
             raise CorruptMemoryDatabase(
                 "Memory database is damaged and no valid backup is available; original files were preserved"
@@ -180,7 +180,7 @@ class Memory:
             source.close()
             source = None
 
-            self._quick_check(temporary)
+            self._integrity_check(temporary)
             os.chmod(temporary, 0o600)
             with open(temporary, "rb+") as stream:
                 os.fsync(stream.fileno())
