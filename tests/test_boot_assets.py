@@ -43,7 +43,7 @@ class BootAssetsTests(unittest.TestCase):
         self.assertIn('-display sdl -no-reboot', script)
         self.assertIn('screendump %s', script)
         capture_line = next(line for line in script.splitlines() if "printf 'screendump %s" in line)
-        self.assertEqual(capture_line.count("\\\\"), 1, 'QEMU monitor screendump must end with a real newline')
+        self.assertEqual(capture_line.count("\\"), 1, 'QEMU monitor screendump must end with a real newline')
         self.assertIn('capture_guest "$MODE-input-focus"', script)
         self.assertNotIn('import -window "$WINDOW"', script)
         self.assertIn('qemu-window-geometry.txt', script)
