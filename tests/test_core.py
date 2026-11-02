@@ -2,6 +2,7 @@ from pathlib import Path
 import copy
 import json
 import os
+import sqlite3
 import tempfile
 import threading
 import time
@@ -9,7 +10,7 @@ import unittest
 from unittest.mock import patch
 from jarvis.core import Core, SYSTEM
 from jarvis.config import Config, atomic_write, secure_read
-from jarvis.memory import bounded_context
+from jarvis.memory import Memory, bounded_context
 from jarvis.providers import OpenAIProvider, ProviderError, Cancellation, validate_url
 from jarvis.system import intent
 from tests.fake_node import Node
@@ -94,6 +95,140 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(self.chat('show RAM usage')[-1]['route'], 'system')
         self.assertFalse(self.core.active)
         self.assertEqual(len(self.node.requests), 1)
+
+    def test_memory_save_rolls_back_a_partial_message_pair(self):
+        ident = self.core.memory.new()
+        with self.core.memory.connect() as db:
+            db.execute("""
+                CREATE TRIGGER reject_assistant BEFORE INSERT ON messages
+                WHEN NEW.role='assistant'
+                BEGIN SELECT RAISE(ABORT, 'simulated disk write failure'); END
+            """)
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.core.memory.save(ident, 'Question', 'Answer', 'local')
+        self.assertEqual(self.core.memory.history(ident), [])
+
+    def test_memory_clear_is_atomic_across_all_tables(self):
+        ident = self.core.memory.new()
+        self.core.memory.save(ident, 'Question', 'Answer', 'local')
+        self.core.memory.remember('Keep this fact until clear commits.')
+        with self.core.memory.connect() as db:
+            db.execute("""
+                CREATE TRIGGER reject_fact_delete BEFORE DELETE ON facts
+                BEGIN SELECT RAISE(ABORT, 'simulated delete failure'); END
+            """)
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.core.memory.clear()
+        self.assertEqual(len(self.core.memory.history(ident)), 2)
+        self.assertEqual(len(self.core.memory.facts()), 1)
+
+    def test_legacy_memory_schema_migrates_without_data_loss(self):
+        directory = self.root / 'legacy-memory'
+        directory.mkdir()
+        path = directory / 'memory.sqlite3'
+        db = sqlite3.connect(path)
+        db.executescript("""
+            CREATE TABLE conversations(id TEXT PRIMARY KEY, title TEXT, created REAL);
+            CREATE TABLE messages(id INTEGER PRIMARY KEY, conversation TEXT,
+                role TEXT, content TEXT, route TEXT, created REAL);
+            CREATE INDEX message_conversation ON messages(conversation,id);
+            CREATE TABLE facts(id INTEGER PRIMARY KEY, content TEXT, created REAL);
+            INSERT INTO conversations VALUES('legacy-id', 'Legacy', 1.0);
+            INSERT INTO messages(conversation,role,content,route,created)
+                VALUES('legacy-id','user','Old question','local',1.0),
+                      ('legacy-id','assistant','Old answer','local',2.0);
+            INSERT INTO facts(content,created) VALUES('Legacy saved fact', 3.0);
+        """)
+        db.close()
+
+        memory = Memory(directory)
+        self.assertEqual([m['content'] for m in memory.history('legacy-id')],
+                         ['Old question', 'Old answer'])
+        self.assertEqual(memory.facts()[0]['content'], 'Legacy saved fact')
+        with memory.connect() as db:
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 1)
+        self.assertTrue(memory.backup_path.is_file())
+        self.assertEqual(memory.backup_path.stat().st_mode & 0o777, 0o600)
+
+    def test_corrupt_memory_restores_valid_backup_and_quarantines_original(self):
+        directory = self.root / 'recover-memory'
+        memory = Memory(directory)
+        ident = memory.new()
+        memory.save(ident, 'Saved question', 'Saved answer', 'local')
+        memory.remember('Recovery checkpoint fact')
+        memory.backup()
+        memory.path.write_bytes(b'not a SQLite database')
+
+        recovered = Memory(directory)
+        self.assertTrue(recovered.recovered_from_backup)
+        self.assertEqual([m['content'] for m in recovered.history(ident)],
+                         ['Saved question', 'Saved answer'])
+        self.assertEqual(recovered.facts()[0]['content'], 'Recovery checkpoint fact')
+        quarantined = list(directory.glob('memory.sqlite3.corrupt-*'))
+        self.assertEqual(len(quarantined), 1)
+        self.assertEqual(quarantined[0].read_bytes(), b'not a SQLite database')
+        self.assertEqual(quarantined[0].stat().st_mode & 0o777, 0o600)
+
+    def test_invalid_backup_never_overwrites_corrupt_primary_database(self):
+        directory = self.root / 'invalid-backup-memory'
+        memory = Memory(directory)
+        memory.path.write_bytes(b'preserve this damaged primary')
+        memory.backup_path.write_bytes(b'also damaged')
+        with self.assertRaises(sqlite3.DatabaseError):
+            Memory(directory)
+        self.assertEqual(memory.path.read_bytes(), b'preserve this damaged primary')
+
+    def test_locked_memory_database_times_out_then_recovers(self):
+        memory = Memory(self.root / 'locked-memory', timeout=0.05)
+        blocker = sqlite3.connect(memory.path, timeout=0.05)
+        blocker.execute('BEGIN EXCLUSIVE')
+        started = time.monotonic()
+        try:
+            with self.assertRaisesRegex(sqlite3.OperationalError, 'locked'):
+                memory.remember('This write must wait only briefly.')
+            self.assertLess(time.monotonic() - started, 1.0)
+        finally:
+            blocker.rollback()
+            blocker.close()
+        self.assertGreater(memory.remember('Write after lock release.'), 0)
+
+    def test_deleting_fact_refreshes_backup_before_recovery(self):
+        directory = self.root / 'delete-memory'
+        memory = Memory(directory)
+        ident = memory.remember('This fact must stay deleted.')
+        memory.backup()
+        memory.delete_fact(ident)
+        memory.path.write_bytes(b'corrupt after deletion')
+        recovered = Memory(directory)
+        self.assertEqual(recovered.facts(), [])
+
+    def test_clear_invalidates_backup_to_prevent_deleted_data_resurrection(self):
+        directory = self.root / 'clear-memory'
+        memory = Memory(directory)
+        memory.remember('This must not return after clear.')
+        memory.clear()
+        self.assertFalse(memory.backup_path.exists())
+        memory.path.write_bytes(b'corrupt after clear')
+        with self.assertRaises(sqlite3.DatabaseError):
+            Memory(directory)
+        self.assertEqual(memory.path.read_bytes(), b'corrupt after clear')
+
+    def test_future_memory_schema_is_rejected_without_rewriting_it(self):
+        directory = self.root / 'future-memory'
+        directory.mkdir()
+        path = directory / 'memory.sqlite3'
+        db = sqlite3.connect(path)
+        db.execute('CREATE TABLE future_table(value TEXT)')
+        db.execute('PRAGMA user_version=99')
+        db.commit()
+        db.close()
+        with self.assertRaisesRegex(sqlite3.DatabaseError, 'newer than supported'):
+            Memory(directory)
+        db = sqlite3.connect(path)
+        try:
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 99)
+        finally:
+            db.close()
 
     def test_memory_search_confirm_delete_replay(self):
         event = list(self.core.request({'method': 'remember', 'content': 'Project ReLife recycles plastic.'}))[-1]
