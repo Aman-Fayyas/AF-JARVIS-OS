@@ -14,6 +14,7 @@ xserver-xorg-video-all
 xinit
 xauth
 x11-xserver-utils
+x11-utils
 xterm
 openbox
 tint2
