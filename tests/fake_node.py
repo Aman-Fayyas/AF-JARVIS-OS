@@ -69,6 +69,19 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(b'data: ' + json.dumps(data).encode() + b'\n\n')
                 self.wfile.flush()
                 return
+            if self.server.behavior == 'sse-compatible':
+                # BOM + comment + CR-only line endings + a multi-line JSON data field.
+                frame = (b'\\xef\\xbb\\xbf: heartbeat\\r'
+                         b'data: {"choices": [\\r'
+                         b'data: {"delta": {"content": "SSE compatible"}, "finish_reason": null}\\r'
+                         b'data: ]}\\r\\rdata: [DONE]\\r\\r')
+                self.wfile.write(frame)
+                self.wfile.flush()
+                return
+            if self.server.behavior == 'sse-incomplete':
+                self.wfile.write(b'data: {"choices":[{"delta":{"content":"must not be emitted"}}]}')
+                self.wfile.flush()
+                return
             if self.server.behavior == 'malformed':
                 self.wfile.write(b'data: not-json\n\n')
                 self.wfile.flush()
