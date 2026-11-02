@@ -40,6 +40,8 @@ class BootAssetsTests(unittest.TestCase):
         script = (ROOT / 'scripts/ci-normal-login-qemu.sh').read_text()
         sequence = 'xdotool key Tab Tab Tab'
         self.assertIn(sequence, script)
+        self.assertIn('-display sdl -full-screen -no-reboot', script)
+        self.assertIn('qemu-window-geometry.txt', script)
         self.assertNotIn('xdotool key Tab Tab Tab Tab', script)
         self.assertLess(script.index(sequence), script.index('xdotool type --clearmodifiers --delay 40 "INPUTCHECKONE"'))
 
