@@ -20,7 +20,7 @@ jobs:
       - name: Install host and display-test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap rsync qemu-system-x86 ovmf socat xvfb xdotool imagemagick tesseract-ocr sshpass openssl
+          sudo apt-get install -y debootstrap rsync qemu-system-x86 ovmf socat xvfb xdotool imagemagick tesseract-ocr sshpass openssl python3-venv espeak-ng curl unzip
 
       - name: Create isolated Debian 13 builder
         run: |
@@ -74,6 +74,37 @@ jobs:
         run: |
           set -euo pipefail
           xvfb-run -a -s "-screen 0 1280x800x24" bash scripts/ci-normal-login-qemu.sh uefi AF-JARVIS-OS-v0.1-alpha.iso "$AF_JARVIS_CI_PASSWORD" "$RUNNER_TEMP/af-jarvis-uefi"
+
+      - name: Validate offline Vosk recognition with generated speech
+        if: steps.bios.outcome == 'success' && steps.uefi.outcome == 'success'
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/vosk-venv"
+          "$RUNNER_TEMP/vosk-venv/bin/python" -m pip install --disable-pip-version-check --no-input vosk==0.3.45
+          curl -fL --retry 3 --connect-timeout 15 "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip" -o "$RUNNER_TEMP/vosk-model.zip"
+          unzip -q "$RUNNER_TEMP/vosk-model.zip" -d "$RUNNER_TEMP"
+          espeak-ng -v en-us -s 135 -w "$RUNNER_TEMP/vosk-test.wav" "Jarvis offline recognition check"
+          "$RUNNER_TEMP/vosk-venv/bin/python" - "$RUNNER_TEMP/vosk-test.wav" "$RUNNER_TEMP/vosk-model-small-en-us-0.15" "$RUNNER_TEMP/vosk-result.json" <<'PY'
+          import json, sys, wave
+          from vosk import Model, KaldiRecognizer
+          wav_path, model_path, out_path = sys.argv[1:]
+          with wave.open(wav_path, "rb") as wav:
+              assert wav.getnchannels() == 1
+              assert wav.getsampwidth() == 2
+              rate = wav.getframerate()
+              audio = wav.readframes(wav.getnframes())
+          model = Model(model_path)
+          recognizer = KaldiRecognizer(model, rate)
+          recognizer.AcceptWaveform(audio)
+          result = json.loads(recognizer.FinalResult())
+          text = result.get("text", "").lower()
+          assert "jarvis" in text and "offline" in text, f"Unexpected transcription: {text!r}"
+          report = {"status": "passed", "mode": "offline", "input": "eSpeak-generated mono PCM WAV", "sample_rate": rate, "recognized_text": text, "physical_microphone": "not tested in hosted CI"}
+          with open(out_path, "w", encoding="utf-8") as f:
+              json.dump(report, f, indent=2)
+          print(json.dumps(report, indent=2))
+          PY
 
       - name: Report firmware validation outcomes
         if: always()
