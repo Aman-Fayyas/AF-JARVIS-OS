@@ -258,7 +258,7 @@ PY
     # while waiting for bluetoothd/its D-Bus service when no adapter is present,
     # so both discovery commands are explicitly bounded and absence is reported
     # as an environment limitation, not a desktop boot failure.
-    guest_ssh 'set -eu; bluetoothctl --version; systemctl show bluetooth.service -p LoadState -p ActiveState --no-pager; timeout --signal=TERM --kill-after=2s 8s bluetoothctl --timeout 5 list || echo "INFO: no responsive Bluetooth controller in this QEMU profile"; timeout --signal=TERM --kill-after=2s 5s rfkill list bluetooth || true' >"$OUT/$MODE-bluetooth.txt"
+    guest_ssh 'set -eu; bluetoothctl --version; systemctl show bluetooth.service -p LoadState -p ActiveState --no-pager; timeout --signal=TERM --kill-after=2s 8s bluetoothctl --timeout 5 list || echo "INFO: no responsive Bluetooth controller in this QEMU profile"; if command -v rfkill >/dev/null 2>&1; then RFKILL_BIN="$(command -v rfkill)"; elif [ -x /usr/sbin/rfkill ]; then RFKILL_BIN=/usr/sbin/rfkill; else RFKILL_BIN=; fi; if [ -n "$RFKILL_BIN" ]; then timeout --signal=TERM --kill-after=2s 5s "$RFKILL_BIN" list bluetooth || true; else echo "INFO: rfkill utility unavailable in this guest"; fi' >"$OUT/$MODE-bluetooth.txt"
     grep -q 'LoadState=loaded' "$OUT/$MODE-bluetooth.txt"
     printf 'INFO: BlueZ service metadata checked; controller discovery was bounded; physical Bluetooth remains a hardware-only check.\n' >"$OUT/$MODE-bluetooth-result.txt"
 
