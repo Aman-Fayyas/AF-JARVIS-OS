@@ -206,8 +206,14 @@ class CoreTests(unittest.TestCase):
         directory = self.root / 'clear-memory'
         memory = Memory(directory)
         memory.remember('This must not return after clear.')
+        stale_backup = directory / '.memory-backup-interrupted'
+        quarantined = directory / 'memory.sqlite3.corrupt-old'
+        stale_backup.write_bytes(b'old snapshot')
+        quarantined.write_bytes(b'old damaged database')
         memory.clear()
         self.assertFalse(memory.backup_path.exists())
+        self.assertFalse(stale_backup.exists())
+        self.assertFalse(quarantined.exists())
         memory.path.write_bytes(b'corrupt after clear')
         with self.assertRaises(sqlite3.DatabaseError):
             Memory(directory)
