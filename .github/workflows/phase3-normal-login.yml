@@ -111,14 +111,19 @@ jobs:
               model = Model(model_path)
               recognizer = KaldiRecognizer(model, rate)
               recognizer.SetWords(True)
+              pieces = []
+              # AF JARVIS voice.py reads 4000 raw PCM bytes per iteration.
+              # For mono S16_LE this is 2000 frames; preserve that chunk size.
               while True:
-                  frames = wav.readframes(4000)
+                  frames = wav.readframes(2000)
                   if not frames:
                       break
-                  recognizer.AcceptWaveform(frames)
+                  if recognizer.AcceptWaveform(frames):
+                      pieces.append(json.loads(recognizer.Result()).get("text", ""))
+              pieces.append(json.loads(recognizer.FinalResult()).get("text", ""))
 
-          result = json.loads(recognizer.FinalResult())
-          recognized = result.get("text", "").lower().split()
+          # Match voice.py: do not lose utterances finalized before FinalResult().
+          recognized = " ".join(piece for piece in pieces if piece).lower().split()
           assert recognized, "Vosk returned an empty transcription"
 
           # Word error rate (Levenshtein distance / reference length) allows
