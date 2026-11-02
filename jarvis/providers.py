@@ -95,8 +95,8 @@ def iter_sse_data(response, cancel, started, timeout=180, max_event=65536):
         if not chunk:
             # A final lone CR is itself a valid line ending. Normalize it so
             # the parser can dispatch a complete final blank-line boundary.
-            if buffer.endswith(b"\\r"):
-                buffer.extend(b"\\n")
+            if buffer.endswith(b"\r"):
+                buffer.extend(b"\n")
             else:
                 break
         else:
