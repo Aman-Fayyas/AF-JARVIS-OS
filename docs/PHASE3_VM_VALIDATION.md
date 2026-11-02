@@ -1,113 +1,55 @@
 # Phase 3 — Full-system VM validation
 
-Status: IN PROGRESS — automated ISO build and BIOS/UEFI desktop boot gate passed; interactive validation gates remain open.
-Branch: minimal-hardware-validation
-Scope: disposable QEMU guest only; no physical disks or installer target.
+Automated BIOS/UEFI normal-login gate: PASS
 
-## Latest automated evidence — 2026-10-31
+Last verified: 2026-11-02  
+Branch: minimal-hardware-validation  
+Commit: 4cca474666949fcadde00bb1429baa3219d53ef8
 
-- QEMU Boot Test workflow completed successfully on commit `19420f883fd5433679b2748f1bfcdd39cc37e431`.
-- Workflow run: https://github.com/Aman-Fayyas/AF-JARVIS-OS/actions/runs/41212431001
-- Artifact: https://github.com/Aman-Fayyas/AF-JARVIS-OS/actions/runs/41212431001/artifacts/13046683357
-- The workflow built the ISO and completed BIOS and UEFI QEMU boot steps. Both guests remained running through the 240-second observation window, and screenshots and logs were uploaded.
-- Critical limitation: this workflow enables LightDM autologin in its disposable CI image. It does not test the normal greeter or password authentication.
-- It does not assert Core health/recovery, desktop behavior, or collect whole-system idle RAM.
+## Latest evidence
 
-This is a successful automated build-and-boot milestone, not completion of all Phase 3 exit criteria.
+- [Normal-login QEMU workflow — run 41487831027](https://github.com/Aman-Fayyas/AF-JARVIS-OS/actions/runs/41487831027)
+- [QEMU boot workflow — run 41487831182](https://github.com/Aman-Fayyas/AF-JARVIS-OS/actions/runs/41487831182)
+- [Functional tests — run 41487830990](https://github.com/Aman-Fayyas/AF-JARVIS-OS/actions/runs/41487830990)
+- [GTK + Core integration — run 41487831436](https://github.com/Aman-Fayyas/AF-JARVIS-OS/actions/runs/41487831436)
+- [Phase 3 evidence artifact](https://github.com/Aman-Fayyas/AF-JARVIS-OS/actions/runs/41487831027/artifacts/13164157182)
 
-## Normal-login CI gate — added 2026-10-31
+The normal-login workflow built a Debian 13 amd64 ISO in an ephemeral runner, verified ISO9660 and BIOS/UEFI El Torito entries, then tested both firmware modes in QEMU. The guest used a temporary CI-only password. Both modes passed the normal LightDM login flow; a deliberately incorrect password was rejected; the AF JARVIS desktop appeared; Core stop/restart recovered and the UI reconnected. Read-only guest diagnostics were schema-checked.
 
-A separate workflow, `.github/workflows/phase3-normal-login.yml`, builds a disposable ISO without adding any LightDM autologin keys. It sets a temporary random password for the disposable `jarvis` account and enables the greeter's hidden-user mode only in the temporary builder copy so CI can enter the standard username/password flow deterministically.
+Additional guest checks passed for QEMU virtual networking recovery, keyboard/mouse interaction, virtual display resolution change/restore, PipeWire virtual HDA playback/capture routing, eSpeak WAV generation, and the parec capture path. The QEMU audio backend is null: these checks validate software routing only, not physical speakers or a microphone. The Vosk workflow generated eSpeak speech, normalized it to 16 kHz mono signed 16-bit PCM, mirrored the application's chunked result aggregation, and achieved an exact 10-word match (WER 0.0).
 
-The workflow runs the same ISO in BIOS and UEFI QEMU guests under Xvfb, captures the greeter, submits the temporary username/password, and requires OCR evidence of the AF JARVIS desktop before passing. It uploads screenshots, OCR text, QEMU logs, result JSON and the ISO checksum as a short-lived artifact. The temporary password is masked in workflow logs and is not uploaded; the password hash is removed from the builder after image creation.
+The uploaded artifact includes screenshots, OCR text, logs, JSON diagnostics and an ISO checksum. It does not include the ISO binary. The separate manual Build AF JARVIS OS ISO workflow has not been run to create a retained downloadable image.
 
-This gate is an automated normal-password-login attempt, unlike the earlier autologin boot test. It does **not** yet verify incorrect-password rejection, interactive Core recovery, lock/unlock, suspend/resume, network/audio behavior, or export the guest's whole-system RAM diagnostic JSON. A green workflow is evidence only for the exact checks asserted by that run. Inspect its artifact and logs before marking the BIOS/UEFI login gate complete.
+## Remaining VM and hardware gates
 
-
-## Normal-login OCR correction — 2026-11-01
-
-The first run of the updated normal-login workflow completed green, but post-run artifact inspection showed both BIOS and UEFI screenshots still on the LightDM username/password dialog. The automation had treated the string `jarvis` as proof of desktop visibility. That run is invalid as login evidence and must not be counted as passed.
-
-The test script was corrected on commit `522a54657d6253e654e9578a21fb975911c5f8bc`: it explicitly clicks the greeter's Log In button after entering the temporary password, rejects screenshots containing greeter labels, and requires three dashboard-specific OCR labels — `AF JARVIS OS`, `Dashboard`, and `Core online` — from the guest display with the QEMU title bar cropped out. The next run's BIOS and UEFI screenshots and OCR text must still be inspected before accepting the result. This improves the assertion but does not independently verify every login/security behavior.
+| Area | Status |
+|---|---|
+| BIOS/UEFI boot and normal login | Passed in hosted QEMU |
+| Wrong-password rejection | Passed in hosted QEMU |
+| Core stop/restart and UI recovery | Passed in hosted QEMU |
+| QEMU virtual network reconnect | Passed |
+| Virtual display resolution recovery | Passed; not UHD 620 acceleration proof |
+| PipeWire virtual audio graph and PCM path | Passed; null backend only |
+| eSpeak file synthesis | Passed; not audible speaker proof |
+| Vosk generated-speech streaming | Passed; not real-user speech or mic proof |
+| Whole-system idle RAM | Guest diagnostics collected; no HP measurement |
+| Secure Boot | Not tested |
+| Suspend/resume and lock/unlock | Not tested |
+| Real tablet inference | Not tested |
+| HP hardware | Not tested |
+| Installer and persistence | Not tested |
 
 ## Safety boundary
 
-- Never attach the host's physical disk to QEMU or run an installer against a host disk.
-- Do not change Windows partitions, BitLocker, Secure Boot or firmware settings.
+- Never attach the host's physical disk to QEMU or run an installer against it.
+- Do not change Windows partitions, BitLocker, Secure Boot or firmware settings for this validation.
 - Do not publish a live-image password/hash or upload a password-bearing ISO publicly.
 - Do not mark a check passed without dated runtime evidence.
-- CI autologin is permitted only in a disposable test image and must never be mistaken for normal-login validation.
+- CI autologin is permitted only in disposable test images and must never be mistaken for normal-login validation.
 
-## Gate A — Build and verify a private test ISO
+## Next steps
 
-Use a dedicated Debian 13 amd64 builder. Generate a unique live-login password locally; do not share it or commit it.
-
-```bash
-umask 077
-openssl passwd -6 > "$HOME/jarvis-live-password.hash"
-sudo env JARVIS_LIVE_PASSWORD_HASH_FILE="$HOME/jarvis-live-password.hash" \
-  bash scripts/build-iso.sh --build "$PWD/build/phase3-vm"
-python3 scripts/verify-iso.py build/phase3-vm/AF-JARVIS-OS-v0.1-alpha.iso
-sha256sum build/phase3-vm/AF-JARVIS-OS-v0.1-alpha.iso
-```
-
-Keep the ISO and hash private.
-
-## Gate B — BIOS and UEFI normal-login tests
-
-Use a fresh build with the repository's normal LightDM configuration (no autologin). Boot separately in BIOS and UEFI using `scripts/run-vm.sh`. For each mode record:
-- ISO checksum, source commit, QEMU version, RAM and vCPU allocation.
-- LightDM greeter appears.
-- Correct password permits login; incorrect password is rejected.
-- Openbox, panel and AF JARVIS desktop appear.
-- Core service starts for the logged-in user and recovers after a controlled stop.
-- Journal contains no unexplained critical session errors.
-
-The current GitHub QEMU workflow is not evidence for these password/login checks because it intentionally enables CI autologin.
-
-## Gate C — Read-only guest diagnostics
-
-After a normal login, wait at least 60 seconds and run:
-
-```bash
-python3 /usr/local/bin/af-jarvis-phase3-check > phase3-guest-report.json
-```
-
-The command emits a JSON report with identity, boot marker, whole-system memory, top process PSS, Core service status/journal, failed units, network device state, audio device listings, display information, boot timing and application presence. It is diagnostic evidence, not a substitute for interactive checks. Retain the complete JSON privately with the VM mode, QEMU version and ISO checksum.
-
-Manually test and record:
-- [ ] Core stop/restart and UI reconnect.
-- [ ] Network disconnect/reconnect; deterministic local actions remain available offline.
-- [ ] Screen lock and password-required unlock.
-- [ ] Suspend/resume and lock-on-resume, if supported by the VM.
-- [ ] Audio playback and microphone behavior; note unavailable virtual devices.
-- [ ] File manager and installed desktop entries launch.
-- [ ] Confirmed guest shutdown works.
-- [ ] No unexpected failed system or user units.
-
-## Gate D — Whole-system idle RAM
-
-The guest report includes MemTotal, MemAvailable and used estimate from `/proc/meminfo`, plus process PSS. Measure after 60 seconds idle, with browser/optional apps closed and no inference or voice capture. Process PSS totals are not whole-system used RAM. VM results are not a substitute for measuring the HP itself.
-
-## VM limitations
-
-A VM cannot fully validate laptop battery, Wi-Fi chipset, Bluetooth, touchpad, UHD 620 acceleration, physical suspend or actual audio hardware. Mark these HARDWARE-ONLY, not passed.
-
-## Exit criteria
-
-Phase 3 passes only when:
-1. BIOS and UEFI normal-login flows are documented without CI autologin.
-2. Desktop/Core lifecycle and relevant VM checklist behaviors have runtime evidence.
-3. Whole-system idle RAM JSON is captured from inside the guest.
-4. Failures and VM-only limitations are recorded.
-
-Only then consider Phase 4: a live USB boot on the HP 250 G7. No installation. Keep Windows and all partitions untouched.
-
-
-## Wrong-password and guest-diagnostics automation — 2026-11-01
-
-The Phase 3 normal-login script now attempts a deliberately invalid password before the correct ephemeral password. It captures the guest display and requires LightDM greeter/authentication text to remain visible while dashboard labels remain absent. This is a visual rejection check, not a full PAM policy audit; inspect both BIOS and UEFI evidence before marking it passed.
-
-The disposable CI image also includes OpenSSH Server. QEMU exposes guest port 22 only on runner loopback (127.0.0.1:2222), and after successful normal login the runner invokes the existing read-only `af-jarvis-phase3-check` as the `jarvis` account. The resulting JSON is schema-checked for the AF JARVIS boot marker, account identity, whole-system MemTotal and Core service diagnostic, then uploaded with the screenshots. The SSH server and port forward are CI-only; no host disk is attached. The temporary guest password is not written into the report or artifact.
-
-These checks are pending until a run completes and the uploaded wrong-password screenshots/results and diagnostic JSON are inspected. A failed SSH readiness check must be treated as an infrastructure/diagnostic failure, not a product pass.
+1. Keep the current passing commit as the rollback point.
+2. Continue software-only reliability fixes and regression tests on this branch.
+3. If a distributable/private ISO is needed, run the manual build workflow with a unique private JARVIS_LIVE_PASSWORD secret; the resulting image embeds its password hash and must be treated as private.
+4. Only after obtaining a spare USB and verifying the ISO checksum, follow docs/LIVE_USB.md for a live-only HP test. Do not install to the internal SSD.
