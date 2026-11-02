@@ -93,8 +93,14 @@ def iter_sse_data(response, cancel, started, timeout=180, max_event=65536):
             raise ProviderError("Generation exceeded the 180-second deadline")
         chunk = response.read1(4096)
         if not chunk:
-            break
-        buffer.extend(chunk)
+            # A final lone CR is itself a valid line ending. Normalize it so
+            # the parser can dispatch a complete final blank-line boundary.
+            if buffer.endswith(b"\\r"):
+                buffer.extend(b"\\n")
+            else:
+                break
+        else:
+            buffer.extend(chunk)
         cursor = 0
         while cursor < len(buffer):
             marker = buffer.find(b"\n", cursor)
