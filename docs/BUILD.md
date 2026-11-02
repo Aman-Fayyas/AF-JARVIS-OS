@@ -2,7 +2,7 @@
 
 ## What this environment validated
 
-The generated live-build tree, required assets, shell syntax, XML and package list structure have been checked. An actual ISO build was not possible: the workspace is Ubuntu 24.04, has no effective Linux capabilities, refuses a tmpfs mount with EPERM, lacks live-build/debootstrap/QEMU, and prohibits AF_UNIX sockets. No bootable image or VM boot result is claimed.
+The generated live-build tree, required assets, shell syntax, XML and package list structure have been checked. An actual ISO build was not possible in the original restricted workspace: it lacked effective mount capabilities, live-build/debootstrap/QEMU and permitted AF_UNIX sockets. No bootable image or VM boot result is claimed until a build artifact is produced and tested.
 
 The script prepares without root using `--prepare`. A real build requires a dedicated **Debian 13 amd64** VM or machine with root, mount and chroot privileges. Budget substantial free disk space (at least 15 GB) and internet access to Debian mirrors. Never use your Windows drive as the build target.
 
@@ -22,7 +22,20 @@ sudo apt install live-build debootstrap squashfs-tools xorriso \
 
 The script checks named image packages against the builder's APT metadata before building. The image uses `main` and `non-free-firmware`, signed Debian repositories and security updates. Ensure those archive areas are configured on the builder for the package check.
 
-## Choose your private live-login password
+## GitHub Actions build
+
+The `.github/workflows/build-iso.yml` workflow builds on the `minimal-hardware-validation` branch when manually dispatched. Before running it, add a repository Actions secret named **`JARVIS_LIVE_PASSWORD`**:
+
+1. Open the repository's **Settings → Secrets and variables → Actions**.
+2. Select **New repository secret**.
+3. Set the name to `JARVIS_LIVE_PASSWORD`.
+4. Set a strong, unique password of at least 16 characters as its value. Do not paste it into chat, source files, workflow logs or commits.
+
+The workflow fails early if the secret is missing or too short. It hashes the password on the runner, transfers only the hash into the temporary Debian build environment, and removes temporary hash files during cleanup. The secret itself is not written to the repository. The resulting ISO still contains the login hash, so treat the ISO as private and keep the password safe. The workflow artifact is retained for 7 days.
+
+To start it, open **Actions → Build AF JARVIS OS ISO → Run workflow**, select `minimal-hardware-validation`, and run. Do not start a USB test until the workflow succeeds, the ISO checksum verifies, and BIOS and UEFI VM boots pass.
+
+## Choose your private live-login password for a local build
 
 Do this on the builder yourself; the assistant does not need the password.
 
@@ -60,7 +73,7 @@ The intended successful output is `build/debian-alpha/AF-JARVIS-OS-v0.1-alpha.is
 
 ## Reproducibility scope
 
-The final artifact is now additionally gated by `scripts/verify-iso.py`: ISO9660 primary volume descriptor, bootable BIOS and UEFI El Torito entries, squashfs, kernel and initrd. A renamed archive is rejected. Structure validation is not a boot test. Both actual firmware boots remain mandatory.
+The final artifact is additionally gated by `scripts/verify-iso.py`: ISO9660 primary volume descriptor, bootable BIOS and UEFI El Torito entries, squashfs, kernel and initrd. A renamed archive is rejected. Structure validation is not a boot test. Both actual firmware boots remain mandatory.
 
 This is a repeatable source/build recipe. Debian repositories update over time, so the same recipe is **not guaranteed to produce byte-identical ISOs**. Save the resolved package manifest, builder versions, logs and source checksum per build. A pinned Debian snapshot, deterministic filesystem timestamps and independent repeat-build comparison are planned before a reproducible-binary claim. Security updates remain enabled by default.
 
