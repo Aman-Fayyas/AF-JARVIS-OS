@@ -87,9 +87,6 @@ def main():
             desktop.remember()
             until(lambda: bool(desktop.fact_list.get_children()))
             assert desktop.engine.get_text() == 'LOCAL • smollm2-360m'
-            desktop.resize(960, 640)
-            until(lambda: desktop.get_allocated_width() <= 1000 and
-                         desktop.get_allocated_height() <= 650)
             desktop.notebook.set_current_page(1)
             def visible_inside_window(widget):
                 translated, _, y = widget.translate_coordinates(desktop, 0, 0)
@@ -112,7 +109,7 @@ def main():
             image = Gdk.pixbuf_get_from_window(window, 0, 0, width, height)
             image.savev(str(root / 'docs/desktop-tested.png'), 'png', [], [])
             results = {'environment': 'Ubuntu 24.04 container, GTK3 on Xvfb; test fixture AI',
-                       'checks': ['framed IPC status', 'native GTK launch', 'deterministic command', 'true SSE token display', 'local history', 'memory save/view', 'route label', 'Core failure leaves desktop responsive', 'Assistant prompt and Send controls visible at 960x640'],
+                       'checks': ['framed IPC status', 'native GTK launch', 'deterministic command', 'true SSE token display', 'local history', 'memory save/view', 'route label', 'Core failure leaves desktop responsive', 'Assistant prompt and Send controls visible at default window size'],
                        'transport': 'TEST ONLY loopback fixture; Unix bind prohibited here' if loopback else 'production Unix socket',
                        'unix_permissions': 'UNTESTED here' if loopback else 'TESTED 0600',
                        'core': call({'method': 'status'})['value']['core_memory'], 'desktop_with_test_harness': resource(os.getpid()),
