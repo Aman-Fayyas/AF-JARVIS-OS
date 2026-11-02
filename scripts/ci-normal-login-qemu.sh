@@ -38,7 +38,7 @@ xdotool getwindowgeometry --shell "$WINDOW" >"$OUT/$MODE-qemu-window-geometry.tx
 capture_guest() {
   local name="$1"
   local ppm="$OUT/$name.ppm"
-  printf 'screendump %s\\n' "$ppm" | socat - UNIX-CONNECT:"$MONITOR" >/dev/null
+  printf 'screendump %s\n' "$ppm" | socat - UNIX-CONNECT:"$MONITOR" >/dev/null
   convert "$ppm" "$OUT/$name.png"
 }
 xdotool windowfocus --sync "$WINDOW"
