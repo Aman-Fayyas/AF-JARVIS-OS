@@ -104,6 +104,11 @@ class BootAssetsTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Not an ISO9660'):
                 module.verify(fake)
 
+    def test_bluetooth_rfkill_probe_resolves_admin_sbin_path(self):
+        script = (ROOT / 'scripts/ci-normal-login-qemu.sh').read_text()
+        self.assertIn('elif [ -x /usr/sbin/rfkill ]', script)
+        self.assertIn('"$RFKILL_BIN" list bluetooth', script)
+
     def test_boot_and_service_security_assets(self):
         packages = set((ROOT / 'distro/packages.list.chroot').read_text().splitlines())
         self.assertTrue({'user-setup', 'libpam-systemd', 'xauth', 'procps'} <= packages)
