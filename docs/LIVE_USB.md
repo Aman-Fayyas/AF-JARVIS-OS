@@ -1,6 +1,6 @@
 # HP live-USB validation
 
-Proceed only after a genuine ISO passes verify-iso.py and both QEMU boot modes. No ISO is supplied in this checkpoint. Keep Windows and the internal disk intact.
+Proceed only after you have a genuine ISO file, its matching SHA256, and passing BIOS/UEFI QEMU evidence for that exact source revision. The latest CI run built and tested an ephemeral ISO, but did not upload the ISO binary; the repository source package also contains no ISO. Use the manual build workflow or a local Debian 13 builder to create a private ISO before any USB test. Keep Windows and the internal disk intact.
 
 1. Back up Windows data and save the BitLocker/device-encryption recovery key if enabled. Use a spare USB whose contents may be erased.
 2. Copy the builder's genuine ISO/checksum to Windows. Compare `Get-FileHash .\AF-JARVIS-OS-v0.1-alpha.iso -Algorithm SHA256` with the builder SHA256.
