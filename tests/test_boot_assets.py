@@ -13,14 +13,14 @@ ROOT = Path(__file__).resolve().parents[1]
 class BootAssetsTests(unittest.TestCase):
     def test_qemu_mouse_probe_accepts_hid_and_usb_tablet_labels(self):
         script = (ROOT / 'scripts/ci-normal-login-qemu.sh').read_text()
-        match = re.search(r"MOUSE_INDEX=\\$\\(sed -nE '([^']+)'", script)
+        match = re.search(r"MOUSE_INDEX=\$\(sed -nE '([^']+)'", script)
         self.assertIsNotNone(match, 'normal-login script must parse QEMU absolute tablet IDs')
         pattern = match.group(1)
         samples = (
-            '* Mouse #3: QEMU HID Tablet (absolute)\\n',
-            '* Mouse #4: QEMU USB Tablet\\n',
+            '* Mouse #3: QEMU HID Tablet (absolute)\n',
+            '* Mouse #4: QEMU USB Tablet\n',
         )
-        for sample, expected in zip(samples, ('3\\n', '4\\n')):
+        for sample, expected in zip(samples, ('3\n', '4\n')):
             with self.subTest(sample=sample):
                 result = subprocess.run(
                     ['sed', '-nE', pattern],
