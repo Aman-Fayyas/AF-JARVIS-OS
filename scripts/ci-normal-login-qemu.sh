@@ -164,21 +164,30 @@ PY
     [[ "$CORE_ONLINE_SEEN" == 1 ]] || { echo "Desktop did not reconnect after Core restart." >&2; cat "$OUT/$MODE-core-reconnected-ocr.txt" >&2 || true; exit 1; }
     printf '{"mode":"%s","core_stop":"desktop-visible-and-reported-offline","core_restart":"desktop-reconnected-and-reported-online"}\n' "$MODE" >"$OUT/$MODE-core-lifecycle-result.json"
     # Set 1: exercise mouse click, keyboard input, focus and Ctrl+A in the live GTK UI.
-    GEOMETRY=$(xdotool getwindowgeometry --shell "$WINDOW")
-    INPUT_WIDTH=$(awk -F= '$1=="WIDTH"{print $2}' <<<"$GEOMETRY")
-    INPUT_HEIGHT=$(awk -F= '$1=="HEIGHT"{print $2}' <<<"$GEOMETRY")
-    xdotool mousemove --window "$WINDOW" 180 140 click 1
+    xdotool windowfocus --sync "$WINDOW"
+    import -window "$WINDOW" "$OUT/$MODE-input-before.png"
+    read -r INPUT_WIDTH INPUT_HEIGHT < <(identify -format '%w %h\n' "$OUT/$MODE-input-before.png")
+    { printf 'captured_window=%sx%s\n' "$INPUT_WIDTH" "$INPUT_HEIGHT"; xdotool getwindowgeometry --shell "$WINDOW"; } >"$OUT/$MODE-input-window-geometry.txt"
+    ASSISTANT_X=$((INPUT_WIDTH * 14 / 100))
+    ASSISTANT_Y=$((INPUT_HEIGHT * 17 / 100))
+    xdotool mousemove --sync --window "$WINDOW" "$ASSISTANT_X" "$ASSISTANT_Y" click 1
     sleep 1
-    xdotool mousemove --window "$WINDOW" "$((INPUT_WIDTH / 2))" "$((INPUT_HEIGHT - 110))" click 1
+    import -window "$WINDOW" "$OUT/$MODE-assistant-page.png"
+    convert "$OUT/$MODE-assistant-page.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-assistant-page-content.png"
+    tesseract "$OUT/$MODE-assistant-page-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-assistant-page-ocr.txt" || true
+    grep -Eqi 'LOCAL FIRST|Send' "$OUT/$MODE-assistant-page-ocr.txt" || { echo "Mouse click did not open the Assistant page." >&2; cat "$OUT/$MODE-assistant-page-ocr.txt" >&2; exit 1; }
+    PROMPT_X=$((INPUT_WIDTH / 2))
+    PROMPT_Y=$((INPUT_HEIGHT * 84 / 100))
+    xdotool mousemove --sync --window "$WINDOW" "$PROMPT_X" "$PROMPT_Y" click 1
     xdotool type --clearmodifiers --delay 40 "INPUTCHECKONE"
     xdotool key ctrl+a
     xdotool type --clearmodifiers --delay 40 "INPUTCHECKOK"
     import -window "$WINDOW" "$OUT/$MODE-input-focus.png"
-    convert "$OUT/$MODE-input-focus.png" -gravity North -chop 0x30 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-input-focus-content.png"
+    convert "$OUT/$MODE-input-focus.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-input-focus-content.png"
     tesseract "$OUT/$MODE-input-focus-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-input-focus-ocr.txt" || true
     grep -Fq 'INPUTCHECKOK' "$OUT/$MODE-input-focus-ocr.txt" || { echo "Keyboard focus/input replacement was not visible in the GTK entry." >&2; cat "$OUT/$MODE-input-focus-ocr.txt" >&2; exit 1; }
     xdotool key ctrl+a BackSpace
-    xdotool mousemove --window "$WINDOW" 80 140 click 1
+    xdotool mousemove --sync --window "$WINDOW" "$((INPUT_WIDTH * 8 / 100))" "$ASSISTANT_Y" click 1
     sleep 1
     printf 'PASS: mouse tab click, focused GTK entry, keyboard typing and Ctrl+A replacement\n' >"$OUT/$MODE-input-focus-result.txt"
 
