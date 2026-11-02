@@ -38,7 +38,7 @@ class BootAssetsTests(unittest.TestCase):
 
     def test_qemu_keyboard_tab_traversal_targets_prompt_entry(self):
         script = (ROOT / 'scripts/ci-normal-login-qemu.sh').read_text()
-        sequence = 'xdotool key Tab Tab Tab\\n'
+        sequence = 'xdotool key Tab Tab Tab'
         self.assertIn(sequence, script)
         self.assertNotIn('xdotool key Tab Tab Tab Tab', script)
         self.assertLess(script.index(sequence), script.index('xdotool type --clearmodifiers --delay 40 "INPUTCHECKONE"'))
