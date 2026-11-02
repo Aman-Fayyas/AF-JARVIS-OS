@@ -133,6 +133,44 @@ assert report.get("memory_mib",{}).get("mem_total")
 assert "user_service_status" in report.get("checks",{})
 print("Guest diagnostic JSON validated.")
 PY
+    # Test user-service failure and recovery in the disposable guest only.
+    guest_ssh() {
+      local command="$1"
+      SSHPASS="$PASSWORD" sshpass -e ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 jarvis@127.0.0.1 \\
+        "uid=\\$(id -u); export XDG_RUNTIME_DIR=\\\"/run/user/\\$uid\\\"; export DBUS_SESSION_BUS_ADDRESS=\\\"unix:path=\\$XDG_RUNTIME_DIR/bus\\\"; export DISPLAY=:0; $command"
+    }
+    guest_ssh 'systemctl --user stop jarvis-core.service && ! systemctl --user is-active --quiet jarvis-core.service'
+    CORE_OFFLINE_SEEN=0
+    for _ in $(seq 1 30); do
+      kill -0 "$QEMU_PID"
+      import -window "$WINDOW" "$OUT/$MODE-core-offline.png"
+      convert "$OUT/$MODE-core-offline.png" -gravity North -chop 0x30 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-core-offline-content.png"
+      tesseract "$OUT/$MODE-core-offline-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-core-offline-ocr.txt" || true
+      if grep -Eqi 'Core offline' "$OUT/$MODE-core-offline-ocr.txt" && grep -Eqi 'Dashboard' "$OUT/$MODE-core-offline-ocr.txt"; then CORE_OFFLINE_SEEN=1; break; fi
+      sleep 2
+    done
+    [[ "$CORE_OFFLINE_SEEN" == 1 ]] || { echo "Desktop did not report Core offline after service stop." >&2; cat "$OUT/$MODE-core-offline-ocr.txt" >&2 || true; exit 1; }
+    guest_ssh 'systemctl --user start jarvis-core.service && for i in $(seq 1 30); do systemctl --user is-active --quiet jarvis-core.service && test -S "$XDG_RUNTIME_DIR/af-jarvis/core.sock" && exit 0; sleep 1; done; exit 1'
+    CORE_ONLINE_SEEN=0
+    for _ in $(seq 1 30); do
+      kill -0 "$QEMU_PID"
+      import -window "$WINDOW" "$OUT/$MODE-core-reconnected.png"
+      convert "$OUT/$MODE-core-reconnected.png" -gravity North -chop 0x30 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-core-reconnected-content.png"
+      tesseract "$OUT/$MODE-core-reconnected-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-core-reconnected-ocr.txt" || true
+      if grep -Eqi 'Core online' "$OUT/$MODE-core-reconnected-ocr.txt" && grep -Eqi 'Dashboard' "$OUT/$MODE-core-reconnected-ocr.txt"; then CORE_ONLINE_SEEN=1; break; fi
+      sleep 2
+    done
+    [[ "$CORE_ONLINE_SEEN" == 1 ]] || { echo "Desktop did not reconnect after Core restart." >&2; cat "$OUT/$MODE-core-reconnected-ocr.txt" >&2 || true; exit 1; }
+    printf '{"mode":"%s","core_stop":"desktop-visible-and-reported-offline","core_restart":"desktop-reconnected-and-reported-online"}\\n' "$MODE" >"$OUT/$MODE-core-lifecycle-result.json"
+    python3 - "$OUT/$MODE-phase3-guest-report.json" <<'PY'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]); report=json.loads(p.read_text(encoding="utf-8"))
+report["workflow_checks"]={"wrong_password_rejection":"passed; greeter remained visible","core_stop_restart_ui_reconnect":"passed; desktop showed offline then online"}
+report["manual_checks_still_required"]=[x for x in report.get("manual_checks_still_required",[]) if x != "wrong-password rejection"]
+p.write_text(json.dumps(report,indent=2)+"\\n",encoding="utf-8")
+PY
+    echo "Normal login, wrong-password rejection, guest diagnostics, and Core recovery passed."
     exit 0
   fi
   sleep 5
