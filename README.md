@@ -2,7 +2,7 @@
 
 A native, lightweight Linux control desktop for Aman Fayyas's HP 250 G7 (i3-8130U, Intel UHD 620, 4 GB RAM). The laptop runs the desktop, routing, memory and deterministic actions. **LLM inference runs on an external authenticated Local AI Node.** Cloud AI is optional and disabled by default.
 
-This release includes working source and a Debian 13 live-image recipe. **There is no ISO in this package. It has not booted in a VM or been validated on the HP laptop.** Read `docs/STATUS.md` before treating a feature as verified.
+This release includes working source and a Debian 13 live-image recipe. **No ISO is included in the source package.** The latest branch has passed CI-built ISO boot and normal-login validation in BIOS and UEFI QEMU; the temporary ISO itself was not uploaded. The HP laptop has not been physically tested. Read `docs/STATUS.md` before treating a feature as verified.
 
 This checkpoint continues the supplied existing project. Read `docs/BOOT_AUDIT.md` for fixes and actual build attempts. On a suitable Debian 13 amd64 machine, the single build command is:
 
@@ -25,6 +25,10 @@ It reports missing dependencies with installation commands, requests sudo, asks 
 - On-demand eSpeak NG speech output; optional Vosk microphone transcription. No microphone process at idle.
 - Openbox session, tint2 panel, LightDM login, PipeWire, NetworkManager, power manager, screen lock and zram configuration.
 - Build scripts, tests, resource measurement, screenshot, documentation and honest test evidence.
+
+## Latest automated validation
+
+On commit 4cca474666949fcadde00bb1429baa3219d53ef8 (2026-11-02): 35 automated tests passed; the ISO built successfully; BIOS and UEFI QEMU normal login passed, including wrong-password rejection and Core stop/restart recovery; GTK/Core integration passed; and the generated-speech Vosk test matched its 10-word reference exactly (WER 0.0). These are hosted virtual-machine checks, not proof of HP hardware compatibility, physical audio, or microphone operation. See docs/STATUS.md and docs/PHASE3_VM_VALIDATION.md.
 
 ## Start here
 
