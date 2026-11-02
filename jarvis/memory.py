@@ -150,9 +150,10 @@ class Memory:
             db.row_factory = sqlite3.Row
             db.execute(f"PRAGMA busy_timeout={int(self.timeout * 1000)}")
             db.execute("PRAGMA secure_delete=ON")
-            # SQLite's default is FULL; pin it explicitly so a future build or
-            # distro default cannot silently weaken committed-write durability.
-            db.execute("PRAGMA synchronous=FULL")
+            # EXTRA adds a directory sync after rollback-journal unlink to
+            # FULL's data/journal syncs. Memory writes are small; durability
+            # after a sudden power loss matters more than shaving a write.
+            db.execute("PRAGMA synchronous=EXTRA")
             with db:
                 yield db
         finally:
