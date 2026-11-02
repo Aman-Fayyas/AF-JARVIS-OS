@@ -1,39 +1,209 @@
 from pathlib import Path
+import json
+import os
+import re
+import shutil
 import sqlite3
+import tempfile
 import time
 import uuid
-import re
-import json
 from contextlib import contextmanager
 from .config import private_dir
 
 
+SCHEMA_VERSION = 1
+
+
+class CorruptMemoryDatabase(sqlite3.DatabaseError):
+    """A database failed SQLite's structural/integrity checks."""
+
+
 class Memory:
-    def __init__(self, directory):
-        directory = private_dir(directory)
-        self.path = directory / "memory.sqlite3"
-        if self.path.is_symlink():
-            raise ValueError("Database cannot be a symlink")
-        with self.connect() as db:
-            db.executescript("""
-                CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY, title TEXT, created REAL);
-                CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY, conversation TEXT,
-                    role TEXT, content TEXT, route TEXT, created REAL);
-                CREATE INDEX IF NOT EXISTS message_conversation ON messages(conversation,id);
-                CREATE TABLE IF NOT EXISTS facts(id INTEGER PRIMARY KEY, content TEXT, created REAL);
-            """)
+    def __init__(self, directory, timeout=5.0):
+        self.directory = private_dir(directory)
+        self.path = self.directory / "memory.sqlite3"
+        self.backup_path = self.directory / "memory.sqlite3.bak"
+        self.timeout = max(0.0, float(timeout))
+        self.recovered_from_backup = False
+        self.backup_error = None
+
+        if self.path.is_symlink() or self.backup_path.is_symlink():
+            raise ValueError("Memory database and backup cannot be symlinks")
+
+        self._recover_if_needed()
+        self._migrate()
         self.path.chmod(0o600)
+        # Backups are best-effort: a full disk must not prevent the local Core
+        # from starting when the primary database itself is healthy.
+        try:
+            self.backup()
+        except (OSError, sqlite3.Error) as error:
+            self.backup_error = type(error).__name__
+
+    @staticmethod
+    def _looks_like_corruption(error):
+        message = str(error).lower()
+        return any(marker in message for marker in (
+            "malformed",
+            "not a database",
+            "file is not a database",
+            "database disk image",
+            "file is encrypted",
+        ))
+
+    def _quick_check(self, path):
+        path = Path(path)
+        if path.is_symlink():
+            raise ValueError("Memory database and backup cannot be symlinks")
+        if not path.is_file() or path.stat().st_size < 100:
+            raise CorruptMemoryDatabase("SQLite database is missing or truncated")
+        db = None
+        try:
+            db = sqlite3.connect(path, timeout=self.timeout)
+            rows = db.execute("PRAGMA quick_check").fetchall()
+            if rows != [("ok",)]:
+                raise CorruptMemoryDatabase("SQLite quick_check reported an integrity failure")
+        except CorruptMemoryDatabase:
+            raise
+        except sqlite3.DatabaseError as error:
+            if self._looks_like_corruption(error):
+                raise CorruptMemoryDatabase("SQLite database is malformed") from error
+            # In particular, a busy/locked database is not corruption and must
+            # never trigger restoration over a database another process uses.
+            raise
+        finally:
+            if db is not None:
+                db.close()
+
+    def _recover_if_needed(self):
+        if self.path.exists():
+            try:
+                self._quick_check(self.path)
+            except CorruptMemoryDatabase:
+                self._restore_backup()
+        elif self.backup_path.exists():
+            self._restore_backup()
+
+    def _restore_backup(self):
+        if self.backup_path.is_symlink():
+            raise ValueError("Memory backup cannot be a symlink")
+        try:
+            self._quick_check(self.backup_path)
+        except (CorruptMemoryDatabase, OSError, sqlite3.Error) as error:
+            raise CorruptMemoryDatabase(
+                "Memory database is damaged and no valid backup is available; original files were preserved"
+            ) from error
+
+        quarantined = None
+        if self.path.exists():
+            quarantined = self.directory / f"memory.sqlite3.corrupt-{time.time_ns()}"
+            os.replace(self.path, quarantined)
+            quarantined.chmod(0o600)
+
+        descriptor, temporary = tempfile.mkstemp(prefix=".memory-restore-", dir=self.directory)
+        try:
+            with os.fdopen(descriptor, "wb") as target, self.backup_path.open("rb") as source:
+                shutil.copyfileobj(source, target)
+                target.flush()
+                os.fsync(target.fileno())
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, self.path)
+            self._fsync_directory()
+            self.recovered_from_backup = True
+        except Exception:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+            if quarantined and quarantined.exists() and not self.path.exists():
+                os.replace(quarantined, self.path)
+            raise
+
+    def _migrate(self):
+        with self.connect() as db:
+            version = db.execute("PRAGMA user_version").fetchone()[0]
+            if version > SCHEMA_VERSION:
+                raise sqlite3.DatabaseError(
+                    f"Memory schema version {version} is newer than supported version {SCHEMA_VERSION}"
+                )
+            # Explicit transaction: a crash during schema creation cannot leave
+            # a half-created set of tables or an incorrectly advanced version.
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY, title TEXT, created REAL)")
+            db.execute("""CREATE TABLE IF NOT EXISTS messages(
+                id INTEGER PRIMARY KEY, conversation TEXT, role TEXT, content TEXT, route TEXT, created REAL
+            )""")
+            db.execute("CREATE INDEX IF NOT EXISTS message_conversation ON messages(conversation,id)")
+            db.execute("CREATE TABLE IF NOT EXISTS facts(id INTEGER PRIMARY KEY, content TEXT, created REAL)")
+            db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+    @staticmethod
+    def _fsync_directory(directory):
+        descriptor = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
     @contextmanager
     def connect(self):
-        db = sqlite3.connect(self.path, timeout=5)
+        db = sqlite3.connect(self.path, timeout=self.timeout)
         try:
             db.row_factory = sqlite3.Row
+            db.execute(f"PRAGMA busy_timeout={int(self.timeout * 1000)}")
             db.execute("PRAGMA secure_delete=ON")
+            # SQLite's default is FULL; pin it explicitly so a future build or
+            # distro default cannot silently weaken committed-write durability.
+            db.execute("PRAGMA synchronous=FULL")
             with db:
                 yield db
         finally:
             db.close()
+
+    def backup(self):
+        """Create a consistent, private SQLite snapshot and atomically publish it."""
+        if self.path.is_symlink() or self.backup_path.is_symlink():
+            raise ValueError("Memory database and backup cannot be symlinks")
+        if not self.path.is_file():
+            raise FileNotFoundError("Memory database does not exist")
+
+        descriptor, temporary = tempfile.mkstemp(prefix=".memory-backup-", dir=self.directory)
+        os.close(descriptor)
+        source = None
+        destination = None
+        try:
+            source = sqlite3.connect(self.path, timeout=self.timeout)
+            destination = sqlite3.connect(temporary, timeout=self.timeout)
+            source.backup(destination, pages=128, sleep=0.05)
+            destination.commit()
+            destination.close()
+            destination = None
+            source.close()
+            source = None
+
+            self._quick_check(temporary)
+            os.chmod(temporary, 0o600)
+            with open(temporary, "rb") as stream:
+                os.fsync(stream.fileno())
+            os.replace(temporary, self.backup_path)
+            self._fsync_directory(self.directory)
+            self.backup_error = None
+            return self.backup_path
+        finally:
+            if destination is not None:
+                destination.close()
+            if source is not None:
+                source.close()
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+
+    def _refresh_backup_after_deletion(self):
+        try:
+            self.backup()
+        except (OSError, sqlite3.Error) as error:
+            self.backup_error = type(error).__name__
+            # Never leave a stale snapshot that could resurrect deliberately
+            # deleted conversations or facts during later corruption recovery.
+            self.backup_path.unlink(missing_ok=True)
+            self._fsync_directory(self.directory)
 
     def new(self, title="New conversation"):
         ident = uuid.uuid4().hex
@@ -112,25 +282,44 @@ class Memory:
 
     def delete_fact(self, ident):
         with self.connect() as db:
-            db.execute("DELETE FROM facts WHERE id=?", (ident,))
+            cursor = db.execute("DELETE FROM facts WHERE id=?", (ident,))
+        if cursor.rowcount:
+            self._refresh_backup_after_deletion()
 
     def delete_conversation(self, ident):
         with self.connect() as db:
+            before = db.total_changes
             db.execute("DELETE FROM messages WHERE conversation=?", (ident,))
             db.execute("DELETE FROM conversations WHERE id=?", (ident,))
+            changed = db.total_changes > before
+        if changed:
+            self._refresh_backup_after_deletion()
 
     def clear(self):
+        # Keep all deletions in one transaction. executescript() implicitly
+        # commits before running and would make a multi-table clear partial.
         with self.connect() as db:
-            db.executescript("DELETE FROM messages; DELETE FROM conversations; DELETE FROM facts;")
-            db.execute("VACUUM")
+            db.execute("DELETE FROM messages")
+            db.execute("DELETE FROM conversations")
+            db.execute("DELETE FROM facts")
+        # A previous snapshot/quarantine must not restore data the user cleared.
+        self.backup_path.unlink(missing_ok=True)
+        for quarantined in self.directory.glob("memory.sqlite3.corrupt-*"):
+            quarantined.unlink(missing_ok=True)
+        self._fsync_directory(self.directory)
+        self.backup_error = None
 
     def prune(self, days):
         cutoff = time.time() - days * 86400
         with self.connect() as db:
+            before = db.total_changes
             db.execute("DELETE FROM messages WHERE created<?", (cutoff,))
             db.execute("DELETE FROM conversations WHERE created<? AND id NOT IN "
                        "(SELECT conversation FROM messages)", (cutoff,))
             db.execute("DELETE FROM facts WHERE created<?", (cutoff,))
+            changed = db.total_changes > before
+        if changed:
+            self._refresh_backup_after_deletion()
 
 
 def bounded_context(system, history, prompt, profile, facts=()):
