@@ -254,9 +254,13 @@ PY
     printf 'PASS: DHCP, default route, DNS resolution and QEMU virtual-link reconnect\n' >"$OUT/$MODE-network-result.txt"
 
     # Set 3: inspect BlueZ and adapter discovery. No controller is expected in this QEMU profile.
-    guest_ssh 'set -eu; bluetoothctl --version; systemctl show bluetooth.service -p LoadState -p ActiveState --no-pager; bluetoothctl list || true; rfkill list bluetooth || true' >"$OUT/$MODE-bluetooth.txt"
+    # QEMU does not provide a Bluetooth controller. bluetoothctl can block
+    # while waiting for bluetoothd/its D-Bus service when no adapter is present,
+    # so both discovery commands are explicitly bounded and absence is reported
+    # as an environment limitation, not a desktop boot failure.
+    guest_ssh 'set -eu; bluetoothctl --version; systemctl show bluetooth.service -p LoadState -p ActiveState --no-pager; timeout --signal=TERM --kill-after=2s 8s bluetoothctl --timeout 5 list || echo "INFO: no responsive Bluetooth controller in this QEMU profile"; timeout --signal=TERM --kill-after=2s 5s rfkill list bluetooth || true' >"$OUT/$MODE-bluetooth.txt"
     grep -q 'LoadState=loaded' "$OUT/$MODE-bluetooth.txt"
-    printf 'INFO: BlueZ service and adapter probe completed; this QEMU profile does not emulate a physical Bluetooth controller.\n' >"$OUT/$MODE-bluetooth-result.txt"
+    printf 'INFO: BlueZ service metadata checked; controller discovery was bounded; physical Bluetooth remains a hardware-only check.\n' >"$OUT/$MODE-bluetooth-result.txt"
 
     # Set 4: QEMU exposes a virtual Intel HDA duplex device with a null host backend.
     # This exercises guest playback/capture routing without claiming physical speakers or a microphone.
@@ -277,7 +281,7 @@ PY
 import json,sys
 from pathlib import Path
 p=Path(sys.argv[1]); report=json.loads(p.read_text(encoding="utf-8"))
-report["workflow_checks"]={"wrong_password_rejection":"passed; greeter remained visible","core_stop_restart_ui_reconnect":"passed; desktop showed offline then online","keyboard_mouse_focus":"passed; GTK tab click and focused entry input verified by OCR after Ctrl+A replacement","network_dhcp_dns_reconnect":"passed; QEMU virtual NIC link reset recovered DHCP, default route, DNS and SSH","bluetooth_service_adapter_probe":"BlueZ service loaded and controller probe captured; QEMU does not emulate physical Bluetooth","audio_virtual_hda":"passed; QEMU Intel HDA virtual playback/capture routed through PipeWire null backend","display_graphics":"passed; virtual resolution switch/restore and OpenGL renderer query","power_session_diagnostics":"captured; suspend/resume not attempted"}
+report["workflow_checks"]={"wrong_password_rejection":"passed; greeter remained visible","core_stop_restart_ui_reconnect":"passed; desktop showed offline then online","keyboard_mouse_focus":"passed; GTK tab click and focused entry input verified by OCR after Ctrl+A replacement","network_dhcp_dns_reconnect":"passed; QEMU virtual NIC link reset recovered DHCP, default route, DNS and SSH","bluetooth_service_adapter_probe":"BlueZ service metadata checked; controller discovery bounded; QEMU does not emulate physical Bluetooth","audio_virtual_hda":"passed; QEMU Intel HDA virtual playback/capture routed through PipeWire null backend","display_graphics":"passed; virtual resolution switch/restore and OpenGL renderer query","power_session_diagnostics":"captured; suspend/resume not attempted"}
 report["manual_checks_still_required"]=[x for x in report.get("manual_checks_still_required",[]) if x not in ("wrong-password rejection","network disconnect/reconnect behavior","audio playback and microphone capture")]
 p.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
 PY
