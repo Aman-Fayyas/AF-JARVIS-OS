@@ -208,8 +208,9 @@ PY
     xdotool key ctrl+a
     xdotool type --clearmodifiers --delay 40 "INPUTCHECKOK"
     capture_guest "$MODE-input-focus"
-    convert "$OUT/$MODE-input-focus.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-input-focus-content.png"
-    tesseract "$OUT/$MODE-input-focus-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-input-focus-ocr.txt" || true
+    # Whole-desktop sparse OCR misses short entry text; inspect the actual GTK entry.
+    convert "$OUT/$MODE-input-focus.png" -crop 1038x54+36+633 +repage -resize 500% -colorspace Gray -contrast-stretch 1%x1% "$OUT/$MODE-input-focus-entry.png"
+    tesseract "$OUT/$MODE-input-focus-entry.png" stdout --psm 7 2>/dev/null >"$OUT/$MODE-input-focus-ocr.txt" || true
     grep -Fq 'INPUTCHECKOK' "$OUT/$MODE-input-focus-ocr.txt" || { echo "Keyboard Tab focus/input replacement was not visible in the GTK entry." >&2; cat "$OUT/$MODE-input-focus-ocr.txt" >&2; exit 1; }
     xdotool key ctrl+a BackSpace
     sleep 1
