@@ -262,6 +262,21 @@ class CoreTests(unittest.TestCase):
                 self.assertFalse(self.core.active)
                 self.assertEqual(self.chat('show RAM usage')[-1]['route'], 'system')
 
+    def test_provider_sse_handles_bom_cr_only_and_multiline_data(self):
+        self.node.behavior = 'sse-compatible'
+        events = self.chat()
+        self.assertEqual(''.join(e['text'] for e in events if e['type'] == 'token'), 'SSE compatible')
+        self.assertEqual(events[-1]['type'], 'done')
+        self.assertTrue(events[-1]['saved'])
+
+    def test_provider_sse_discards_unterminated_event(self):
+        self.node.behavior = 'sse-incomplete'
+        with self.assertRaisesRegex(ValueError, 'All allowed providers failed'):
+            self.chat()
+        self.assertFalse(self.core.active)
+        with self.core.memory.connect() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM messages').fetchone()[0], 0)
+
     def test_malformed_models_report_provider_error(self):
         self.node.behavior = 'bad-models'
         with self.assertRaises(ProviderError):
