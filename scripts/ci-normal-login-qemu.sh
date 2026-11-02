@@ -189,9 +189,9 @@ PY
     fi
     printf 'PASS: QEMU USB-tablet absolute pointer click opened the Assistant page (device %s, guest coordinates 183x140).\n' "$MOUSE_INDEX" >"$OUT/$MODE-mouse-click-result.txt"
 
-    # Keyboard Tab traversal reaches the Assistant prompt without assuming
-    # that the guest framebuffer and host X window share the same scale.
-    xdotool key Tab Tab Tab Tab
+    # After selecting the Assistant notebook tab, focus advances through the
+    # route selector and privacy checkbox before reaching the prompt entry.
+    xdotool key Tab Tab Tab
     sleep 1
     xdotool type --clearmodifiers --delay 40 "INPUTCHECKONE"
     xdotool key ctrl+a
