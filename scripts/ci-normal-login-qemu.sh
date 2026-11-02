@@ -7,7 +7,7 @@ PASSWORD="${3:?temporary test password}"
 OUT="${4:-.}"
 mkdir -p "$OUT"
 MONITOR="/tmp/af-jarvis-${MODE}-monitor.sock"
-QEMU=(qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom "$ISO" -boot d -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 -audiodev driver=none,id=audio0 -device intel-hda -device hda-duplex,audiodev=audio0 -display sdl -no-reboot -monitor "unix:$MONITOR,server,nowait")
+QEMU=(qemu-system-x86_64 -machine accel=tcg -cpu max -m 1536 -smp 2 -cdrom "$ISO" -boot d -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2222-:22 -usb -device usb-tablet -audiodev driver=none,id=audio0 -device intel-hda -device hda-duplex,audiodev=audio0 -display sdl -no-reboot -monitor "unix:$MONITOR,server,nowait")
 if [[ "$MODE" == uefi ]]; then
   OVMF_CODE=$(find /usr/share/OVMF -type f \( -name 'OVMF_CODE_4M.fd' -o -name 'OVMF_CODE.fd' \) | head -n1)
   [[ -n "$OVMF_CODE" ]]
@@ -163,47 +163,32 @@ PY
     done
     [[ "$CORE_ONLINE_SEEN" == 1 ]] || { echo "Desktop did not reconnect after Core restart." >&2; cat "$OUT/$MODE-core-reconnected-ocr.txt" >&2 || true; exit 1; }
     printf '{"mode":"%s","core_stop":"desktop-visible-and-reported-offline","core_restart":"desktop-reconnected-and-reported-online"}\n' "$MODE" >"$OUT/$MODE-core-lifecycle-result.json"
-    # Set 1: exercise mouse click, keyboard input, focus and Ctrl+A in the live GTK UI.
-    xdotool windowfocus --sync "$WINDOW"
-    xdotool windowraise "$WINDOW" 2>/dev/null || true
-    import -window "$WINDOW" "$OUT/$MODE-input-before.png"
-    SCREENSHOT_GEOMETRY=$(identify -format '%wx%h' "$OUT/$MODE-input-before.png")
-    GEOMETRY=$(xdotool getwindowgeometry --shell "$WINDOW")
-    INPUT_WIDTH=$(awk -F= '$1=="WIDTH"{print $2}' <<<"$GEOMETRY")
-    INPUT_HEIGHT=$(awk -F= '$1=="HEIGHT"{print $2}' <<<"$GEOMETRY")
-    WINDOW_X=$(awk -F= '$1=="X"{print $2}' <<<"$GEOMETRY")
-    WINDOW_Y=$(awk -F= '$1=="Y"{print $2}' <<<"$GEOMETRY")
-    DISPLAY_GEOMETRY=$(xdotool getdisplaygeometry)
-    MOUSE_BEFORE=$(xdotool getmouselocation --shell)
-    { printf 'screenshot_framebuffer=%s\nxdotool_window=%sx%s+%s+%s\ndisplay=%s\nmouse_before:\n%s\n' "$SCREENSHOT_GEOMETRY" "$INPUT_WIDTH" "$INPUT_HEIGHT" "$WINDOW_X" "$WINDOW_Y" "$DISPLAY_GEOMETRY" "$MOUSE_BEFORE"; } >"$OUT/$MODE-input-window-geometry.txt"
-
-    # The SDL window and captured framebuffer can use different coordinate
-    # spaces. Try the measured framebuffer coordinates, scaled window
-    # coordinates, and absolute X coordinates derived from the window origin.
-    # Accept only a click that visibly switches the GTK notebook to Assistant.
-    ASSISTANT_OPEN=0
-    for COORDS in "window:180:140" "window:240:175" "window:256:176" \
-                  "screen:180:140" "screen:$((WINDOW_X + 180)):$((WINDOW_Y + 140))" \
-                  "screen:$((WINDOW_X + 240)):$((WINDOW_Y + 175))" \
-                  "screen:$((WINDOW_X + 256)):$((WINDOW_Y + 176))"; do
-      IFS=: read -r COORD_MODE CLICK_X CLICK_Y <<<"$COORDS"
-      if [[ "$COORD_MODE" == "window" ]]; then
-        xdotool mousemove --sync --window "$WINDOW" "$CLICK_X" "$CLICK_Y"
-      else
-        xdotool mousemove --sync "$CLICK_X" "$CLICK_Y"
-      fi
-      xdotool click 1
-      sleep 1
-      import -window "$WINDOW" "$OUT/$MODE-assistant-page.png"
-      convert "$OUT/$MODE-assistant-page.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-assistant-page-content.png"
-      tesseract "$OUT/$MODE-assistant-page-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-assistant-page-ocr.txt" || true
-      if grep -Eqi 'LOCAL FIRST|Send' "$OUT/$MODE-assistant-page-ocr.txt"; then
-        ASSISTANT_OPEN=1
-        printf 'mode=%s,x=%s,y=%s\n' "$COORD_MODE" "$CLICK_X" "$CLICK_Y" >"$OUT/$MODE-mouse-click-result.txt"
-        break
-      fi
-    done
-    [[ "$ASSISTANT_OPEN" == 1 ]] || { echo "Mouse click could not open the Assistant page in any calibrated coordinate mode." >&2; cat "$OUT/$MODE-input-window-geometry.txt" >&2; cat "$OUT/$MODE-assistant-page-ocr.txt" >&2; exit 1; }
+    # Set 1: send an absolute USB-tablet pointer event through QEMU's monitor.
+    # This tests the guest HID mouse path without relying on SDL/Xvfb window scaling.
+    printf 'info mice\\n' | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-mouse-devices.txt"
+    MOUSE_INDEX=$(sed -nE 's/.*Mouse #([0-9]+): QEMU USB Tablet.*/\\1/p' "$OUT/$MODE-mouse-devices.txt" | head -n1)
+    [[ -n "$MOUSE_INDEX" ]] || { echo "QEMU USB tablet was not enumerated by the monitor." >&2; cat "$OUT/$MODE-mouse-devices.txt" >&2; exit 1; }
+    # Guest display is 1280x800; QEMU absolute pointer coordinates use 0..32767.
+    MOUSE_X=$((183 * 32767 / 1280))
+    MOUSE_Y=$((140 * 32767 / 800))
+    {
+      printf 'mouse_set %s\\n' "$MOUSE_INDEX"
+      printf 'mouse_move %s %s\\n' "$MOUSE_X" "$MOUSE_Y"
+      printf 'mouse_button 1\\n'
+      printf 'mouse_button 0\\n'
+    } | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-mouse-click-monitor.txt"
+    sleep 1
+    import -window "$WINDOW" "$OUT/$MODE-assistant-page.png"
+    convert "$OUT/$MODE-assistant-page.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-assistant-page-content.png"
+    tesseract "$OUT/$MODE-assistant-page-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-assistant-page-ocr.txt" || true
+    if ! grep -Eqi 'LOCAL FIRST|Send' "$OUT/$MODE-assistant-page-ocr.txt"; then
+      echo "QEMU USB-tablet click did not open the Assistant page." >&2
+      cat "$OUT/$MODE-mouse-devices.txt" >&2
+      cat "$OUT/$MODE-mouse-click-monitor.txt" >&2
+      cat "$OUT/$MODE-assistant-page-ocr.txt" >&2
+      exit 1
+    fi
+    printf 'PASS: QEMU USB-tablet absolute pointer click opened the Assistant page (device %s, guest coordinates 183x140).\\n' "$MOUSE_INDEX" >"$OUT/$MODE-mouse-click-result.txt"
 
     # Keyboard Tab traversal reaches the Assistant prompt without assuming
     # that the guest framebuffer and host X window share the same scale.
