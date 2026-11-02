@@ -181,7 +181,7 @@ class Memory:
 
             self._quick_check(temporary)
             os.chmod(temporary, 0o600)
-            with open(temporary, "rb") as stream:
+            with open(temporary, "rb+") as stream:
                 os.fsync(stream.fileno())
             os.replace(temporary, self.backup_path)
             self._fsync_directory(self.directory)
