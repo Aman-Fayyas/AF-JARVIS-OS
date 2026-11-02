@@ -285,7 +285,33 @@ report["workflow_checks"]={"wrong_password_rejection":"passed; greeter remained 
 report["manual_checks_still_required"]=[x for x in report.get("manual_checks_still_required",[]) if x not in ("wrong-password rejection","network disconnect/reconnect behavior","audio playback and microphone capture")]
 p.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
 PY
-    echo "Normal login, wrong-password rejection, guest diagnostics, and Core recovery passed."
+    # Phase 4A: eSpeak-NG synthesis must produce a valid PCM WAV in the booted guest.
+    guest_ssh 'set -eu; espeak-ng -w /tmp/af-jarvis-espeak-test.wav "AF JARVIS speech synthesis check"; python3 -c "import wave; w=wave.open(\"/tmp/af-jarvis-espeak-test.wav\"); assert w.getnframes()>0 and w.getframerate()>0; print({\"rate\":w.getframerate(),\"frames\":w.getnframes(),\"channels\":w.getnchannels()})"'
+    printf 'PASS: eSpeak-NG generated a non-empty WAV in the booted guest; physical speaker output is not asserted.\\n' >"$OUT/$MODE-espeak-result.txt"
+
+    # Phase 4B: explicitly verify the PipeWire graph and PulseAudio-compatible
+    # interface used by the desktop voice code.
+    guest_ssh 'set -eu; pactl info; wpctl status; pw-cli info 0; systemctl --user is-active pipewire.service; systemctl --user is-active pipewire-pulse.service; systemctl --user is-active wireplumber.service' >"$OUT/$MODE-pipewire.txt"
+    grep -qi 'Server Name: PulseAudio (on PipeWire' "$OUT/$MODE-pipewire.txt"
+    printf 'PASS: PipeWire, WirePlumber and PipeWire-Pulse are active in the QEMU guest.\\n' >"$OUT/$MODE-pipewire-result.txt"
+
+    # Phase 4C: prove the booted desktop is backed by Xorg and GTK's display
+    # server is responsive; the screenshots above are captured from QEMU itself.
+    guest_ssh 'set -eu; pgrep -a Xorg; xdpyinfo >/tmp/af-jarvis-xdpyinfo.txt; grep -q "dimensions:" /tmp/af-jarvis-xdpyinfo.txt; xrandr --current' >"$OUT/$MODE-xorg-rendering.txt"
+    printf 'PASS: booted QEMU guest Xorg display responds to X11 queries; GTK desktop screenshot/OCR evidence is retained.\\n' >"$OUT/$MODE-xorg-rendering-result.txt"
+
+    # Phase 4D: change resolution, verify the desktop remains responsive, then
+    # restore the original mode. The QEMU display is virtual, not the HP panel.
+    guest_ssh 'set -eu; xrandr --output Virtual-1 --mode 1024x768; sleep 2; xdpyinfo | grep -q "dimensions:.*1024x768"; xrandr --output Virtual-1 --mode 1280x800; sleep 2; xdpyinfo | grep -q "dimensions:.*1280x800"; pgrep -x Xorg >/dev/null; xrandr --current' >"$OUT/$MODE-resolution-recovery.txt"
+    printf 'PASS: virtual resolution change and restore completed; Xorg remained alive.\\n' >"$OUT/$MODE-resolution-recovery-result.txt"
+
+    # Phase 4E: validate the actual parec capture path used by jarvis/voice.py.
+    # QEMU uses a null host audio backend; non-empty capture proves the software
+    # path only, not a physical microphone or audible sound.
+    guest_ssh 'set -eu; timeout --signal=TERM --kill-after=2s 4s parec --raw --format=s16le --rate=16000 --channels=1 >/tmp/af-jarvis-parec-capture.raw || rc=$?; test "${rc:-0}" -eq 124; test -s /tmp/af-jarvis-parec-capture.raw; python3 -c "from pathlib import Path; p=Path(\"/tmp/af-jarvis-parec-capture.raw\"); n=p.stat().st_size; assert n>=64000; print(f\"captured_bytes={n}\")"'
+    printf 'PASS: PipeWire-Pulse parec capture path returned PCM data; physical microphone remains untested.\\n' >"$OUT/$MODE-microphone-capture-result.txt"
+
+    echo "Normal login, wrong-password rejection, guest diagnostics, Core recovery and Phase 4 guest checks passed."
     exit 0
   fi
   sleep 5
