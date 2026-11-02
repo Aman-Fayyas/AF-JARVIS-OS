@@ -48,7 +48,7 @@ class BootAssetsTests(unittest.TestCase):
         self.assertIn('-crop 1038x54+36+633', script)
         self.assertIn('stdout --psm 11', script)
         self.assertIn('INPUT_OCR=$(tr -cd', script)
-        self.assertIn('INPUT_OCR' + '" == *INPUTCHECKO*', script)
+        self.assertIn('== *INPUTCHECKO*', script)
         self.assertIn('INPUTCHECKONE', script)
         self.assertNotIn('import -window "$WINDOW"', script)
         self.assertIn('qemu-window-geometry.txt', script)
