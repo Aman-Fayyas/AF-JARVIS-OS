@@ -100,7 +100,7 @@ jobs:
           result = json.loads(recognizer.FinalResult())
           text = result.get("text", "").lower()
           required_words = {"offline", "recognition"}
-assert required_words.issubset(set(text.split())), f"Missing expected speech-recognition words {sorted(required_words)} in transcription: {text!r}"
+          assert required_words.issubset(set(text.split())), f"Missing expected speech-recognition words {sorted(required_words)} in transcription: {text!r}"
           report = {"status": "passed", "mode": "offline", "input": "eSpeak-generated mono PCM WAV", "sample_rate": rate, "recognized_text": text, "expected_words": ["offline", "recognition"], "physical_microphone": "not tested in hosted CI"}
           with open(out_path, "w", encoding="utf-8") as f:
               json.dump(report, f, indent=2)
