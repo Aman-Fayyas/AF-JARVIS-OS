@@ -165,17 +165,17 @@ PY
     printf '{"mode":"%s","core_stop":"desktop-visible-and-reported-offline","core_restart":"desktop-reconnected-and-reported-online"}\n' "$MODE" >"$OUT/$MODE-core-lifecycle-result.json"
     # Set 1: send an absolute USB-tablet pointer event through QEMU's monitor.
     # This tests the guest HID mouse path without relying on SDL/Xvfb window scaling.
-    printf 'info mice\\n' | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-mouse-devices.txt"
-    MOUSE_INDEX=$(sed -nE 's/.*Mouse #([0-9]+): QEMU USB Tablet.*/\\1/p' "$OUT/$MODE-mouse-devices.txt" | head -n1)
+    printf 'info mice\n' | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-mouse-devices.txt"
+    MOUSE_INDEX=$(sed -nE 's/.*Mouse #([0-9]+): QEMU USB Tablet.*/\1/p' "$OUT/$MODE-mouse-devices.txt" | head -n1)
     [[ -n "$MOUSE_INDEX" ]] || { echo "QEMU USB tablet was not enumerated by the monitor." >&2; cat "$OUT/$MODE-mouse-devices.txt" >&2; exit 1; }
     # Guest display is 1280x800; QEMU absolute pointer coordinates use 0..32767.
     MOUSE_X=$((183 * 32767 / 1280))
     MOUSE_Y=$((140 * 32767 / 800))
     {
-      printf 'mouse_set %s\\n' "$MOUSE_INDEX"
-      printf 'mouse_move %s %s\\n' "$MOUSE_X" "$MOUSE_Y"
-      printf 'mouse_button 1\\n'
-      printf 'mouse_button 0\\n'
+      printf 'mouse_set %s\n' "$MOUSE_INDEX"
+      printf 'mouse_move %s %s\n' "$MOUSE_X" "$MOUSE_Y"
+      printf 'mouse_button 1\n'
+      printf 'mouse_button 0\n'
     } | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-mouse-click-monitor.txt"
     sleep 1
     import -window "$WINDOW" "$OUT/$MODE-assistant-page.png"
@@ -188,7 +188,7 @@ PY
       cat "$OUT/$MODE-assistant-page-ocr.txt" >&2
       exit 1
     fi
-    printf 'PASS: QEMU USB-tablet absolute pointer click opened the Assistant page (device %s, guest coordinates 183x140).\\n' "$MOUSE_INDEX" >"$OUT/$MODE-mouse-click-result.txt"
+    printf 'PASS: QEMU USB-tablet absolute pointer click opened the Assistant page (device %s, guest coordinates 183x140).\n' "$MOUSE_INDEX" >"$OUT/$MODE-mouse-click-result.txt"
 
     # Keyboard Tab traversal reaches the Assistant prompt without assuming
     # that the guest framebuffer and host X window share the same scale.
