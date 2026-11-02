@@ -175,15 +175,16 @@ PY
     xdotool mousemove --window "$WINDOW" 183 140
     sleep 0.3
     xdotool click 1
+    printf 'info mice\n' | socat - UNIX-CONNECT:"$MONITOR" >"$OUT/$MODE-mouse-click-monitor.txt"
     sleep 1
     import -window "$WINDOW" "$OUT/$MODE-assistant-page.png"
     convert "$OUT/$MODE-assistant-page.png" -gravity North -chop 0x24 -colorspace Gray -resize 250% -contrast-stretch 1%x1% "$OUT/$MODE-assistant-page-content.png"
     tesseract "$OUT/$MODE-assistant-page-content.png" stdout --psm 11 2>/dev/null >"$OUT/$MODE-assistant-page-ocr.txt" || true
-    if ! grep -Eqi 'LOCAL FIRST|Send' "$OUT/$MODE-assistant-page-ocr.txt"; then
-      echo "QEMU USB-tablet click did not open the Assistant page." >&2
-      cat "$OUT/$MODE-mouse-devices.txt" >&2
-      cat "$OUT/$MODE-mouse-click-monitor.txt" >&2
-      cat "$OUT/$MODE-assistant-page-ocr.txt" >&2
+    if ! grep -Eqi 'Sensitive: keep local' "$OUT/$MODE-assistant-page-ocr.txt"; then
+      echo "QEMU USB-tablet click did not expose the Assistant-only controls." >&2
+      cat "$OUT/$MODE-mouse-devices.txt" >&2 || true
+      cat "$OUT/$MODE-mouse-click-monitor.txt" >&2 || true
+      cat "$OUT/$MODE-assistant-page-ocr.txt" >&2 || true
       exit 1
     fi
     printf 'PASS: QEMU USB-tablet absolute pointer click opened the Assistant page (device %s, guest coordinates 183x140).\n' "$MOUSE_INDEX" >"$OUT/$MODE-mouse-click-result.txt"

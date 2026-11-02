@@ -18,6 +18,8 @@ class BootAssetsTests(unittest.TestCase):
         pattern = match.group(1)
         self.assertIn('xdotool mousemove --window "$WINDOW" 183 140', script)
         self.assertIn('xdotool click 1', script)
+        self.assertIn('Sensitive: keep local', script)
+        self.assertIn('bios-mouse-click-monitor.txt', script)
         self.assertNotIn("printf 'mouse_move", script)
         samples = (
             '* Mouse #3: QEMU HID Tablet (absolute)\n',
