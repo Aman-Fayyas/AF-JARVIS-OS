@@ -12,7 +12,7 @@ permissions:
 jobs:
   normal-login:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 100
     steps:
       - name: Check out validation branch
         uses: actions/checkout@v4
@@ -60,14 +60,28 @@ jobs:
           rm -f "$RUNNER_TEMP/af-jarvis-ci-password.hash"
 
       - name: Validate BIOS normal login
+        id: bios
+        timeout-minutes: 35
+        continue-on-error: true
         run: |
           set -euo pipefail
           xvfb-run -a -s "-screen 0 1280x800x24" bash scripts/ci-normal-login-qemu.sh bios AF-JARVIS-OS-v0.1-alpha.iso "$AF_JARVIS_CI_PASSWORD" "$RUNNER_TEMP/af-jarvis-bios"
 
       - name: Validate UEFI normal login
+        id: uefi
+        timeout-minutes: 35
+        continue-on-error: true
         run: |
           set -euo pipefail
           xvfb-run -a -s "-screen 0 1280x800x24" bash scripts/ci-normal-login-qemu.sh uefi AF-JARVIS-OS-v0.1-alpha.iso "$AF_JARVIS_CI_PASSWORD" "$RUNNER_TEMP/af-jarvis-uefi"
+
+      - name: Report firmware validation outcomes
+        if: always()
+        run: |
+          echo "BIOS outcome: ${{ steps.bios.outcome }}"
+          echo "UEFI outcome: ${{ steps.uefi.outcome }}"
+          test "${{ steps.bios.outcome }}" = success
+          test "${{ steps.uefi.outcome }}" = success
 
       - name: Upload normal-login evidence
         if: always()
