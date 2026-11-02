@@ -108,7 +108,7 @@ class Memory:
                 os.fsync(target.fileno())
             os.chmod(temporary, 0o600)
             os.replace(temporary, self.path)
-            self._fsync_directory()
+            self._fsync_directory(self.directory)
             self.recovered_from_backup = True
         except Exception:
             if os.path.exists(temporary):
