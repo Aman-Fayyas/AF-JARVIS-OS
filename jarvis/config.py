@@ -71,6 +71,14 @@ class Config:
         for field in ("memory_enabled", "history_enabled", "cloud_enabled"):
             if not isinstance(self.data.get(field), bool):
                 raise ValueError(f"{field} must be true or false")
+        voice = self.data.get("voice")
+        if not isinstance(voice, dict):
+            raise ValueError("Voice settings must be a table")
+        if type(voice.get("tts", True)) is not bool:
+            raise ValueError("voice.tts must be true or false")
+        model_path = voice.get("stt_model", "")
+        if not isinstance(model_path, str) or len(model_path) > 4096:
+            raise ValueError("Invalid speech model path")
         for key, low, high in (("retention_days", 1, 3650),
                                ("timeout_seconds", 1, 120),
                                ("max_response_chars", 100, 96000)):
@@ -157,8 +165,14 @@ class Config:
     def update_voice(self, model):
         if not isinstance(model, str) or len(model) > 4096:
             raise ValueError("Invalid speech model path")
-        self.data["voice"]["stt_model"] = model
-        self.persist()
+        old = self.data["voice"].copy()
+        try:
+            self.data["voice"]["stt_model"] = model
+            self.validate()
+            self.persist()
+        except Exception:
+            self.data["voice"] = old
+            raise
 
     def key(self, profile):
         relative = Path(profile.get("key_file", ""))

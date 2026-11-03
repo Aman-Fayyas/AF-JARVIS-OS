@@ -122,23 +122,29 @@ class Desktop(Gtk.Window):
         content.set_border_width(14)
         self.notebook.append_page(content, Gtk.Label(label=title))
 
+    def enqueue_until_open(self, callback, event):
+        # A full UI queue must apply backpressure, not drop the final callback.
+        # In particular, losing chat_finished leaves the Send button disabled.
+        while not self.closed:
+            try:
+                self.enqueue(callback, event)
+                return True
+            except queue.Full:
+                continue
+        return False
+
     def worker(self, request, callback=None):
         def work():
             try:
                 for event in ipc.events(request):
-                    while not self.closed:
-                        try:
-                            self.enqueue(callback or self.handle_event, event)
-                            break
-                        except queue.Full:
-                            continue
+                    if not self.enqueue_until_open(callback or self.handle_event, event):
+                        break
             except Exception as error:
                 event = {'type': 'error', 'message': str(error) if isinstance(error, (ValueError, RuntimeError)) else 'Core unavailable. Desktop applications remain usable.'}
-                if not self.closed:
-                    self.enqueue(callback or self.handle_event, event)
+                self.enqueue_until_open(callback or self.handle_event, event)
             finally:
-                if request['method'] == 'chat' and not self.closed:
-                    self.enqueue(self.chat_finished, {})
+                if request['method'] == 'chat':
+                    self.enqueue_until_open(self.chat_finished, {})
         threading.Thread(target=work, daemon=True).start()
 
     def enqueue(self, callback, event):
@@ -666,9 +672,9 @@ class Desktop(Gtk.Window):
         def work():
             try:
                 result = transcribe(self.config.get('voice', {}).get('stt_model', ''))
-                self.enqueue(self.record_done, {'text': result})
+                self.enqueue_until_open(self.record_done, {'text': result})
             except Exception as error:
-                self.enqueue(self.record_done, {'error': str(error)})
+                self.enqueue_until_open(self.record_done, {'error': str(error)})
         threading.Thread(target=work, daemon=True).start()
 
     def make_search(self):
@@ -726,7 +732,7 @@ class Desktop(Gtk.Window):
             try:
                 speak(self.last_answer)
             except Exception as error:
-                self.enqueue(self.handle_event, {'type': 'notice', 'message': str(error)})
+                self.enqueue_until_open(self.handle_event, {'type': 'notice', 'message': str(error)})
         threading.Thread(target=work, daemon=True).start()
 
     def close(self, *_):

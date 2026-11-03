@@ -382,6 +382,20 @@ class CoreTests(unittest.TestCase):
                 self.core.config.update_profile('tablet', changes)
         self.assertIs(self.core.config.data['nodes'][0]['enabled'], True)
 
+    def test_invalid_voice_settings_are_rejected_without_replacing_working_config(self):
+        original = copy.deepcopy(self.core.config.data)
+        atomic_write(self.root / 'config/preferences.json', '{"voice": "not-a-table"}')
+        with self.assertRaisesRegex(ValueError, 'Voice settings must be a table'):
+            self.core.config.reload()
+        self.assertEqual(self.core.config.data, original)
+
+    def test_voice_setting_persistence_failure_rolls_back_live_config(self):
+        original = copy.deepcopy(self.core.config.data['voice'])
+        with patch('jarvis.config.atomic_write', side_effect=OSError('disk full')):
+            with self.assertRaisesRegex(OSError, 'disk full'):
+                self.core.config.update_voice('/models/vosk')
+        self.assertEqual(self.core.config.data['voice'], original)
+
     def test_privacy_changes_blocked_during_generation(self):
         stream = self.core.request({'method': 'chat', 'prompt': 'RAM?'})
         next(stream)

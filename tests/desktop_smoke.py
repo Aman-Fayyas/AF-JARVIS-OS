@@ -2,10 +2,13 @@
 from pathlib import Path
 import json
 import os
+import queue
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from unittest.mock import patch
 import gi
 
 gi.require_version('Gtk', '3.0')
@@ -35,6 +38,41 @@ def resource(pid):
             key, count, _ = line.split()
             values[key.rstrip(':').lower() + '_mib'] = round(int(count) / 1024, 2)
     return values
+
+
+def verify_worker_queue_backpressure(desktop):
+    original_queue = desktop.messages
+    original_pending = desktop.drain_pending
+    limited = queue.Queue(maxsize=1)
+    marker = object()
+    limited.put((lambda _event: None, marker))
+    started = threading.Event()
+
+    def empty_events(_request):
+        started.set()
+        return iter(())
+
+    try:
+        desktop.messages = limited
+        with desktop.drain_lock:
+            desktop.drain_pending = False
+        with patch('jarvis.desktop.ipc.events', side_effect=empty_events):
+            desktop.worker({'method': 'chat'})
+            assert started.wait(2), 'chat worker did not start'
+            # Let the completion callback hit the full queue and block.
+            time.sleep(0.3)
+            assert limited.full(), 'queue unexpectedly drained during backpressure test'
+            limited.get_nowait()
+            deadline = time.monotonic() + 2
+            while limited.empty() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert not limited.empty(), 'chat completion callback was lost on a full queue'
+            callback, event = limited.get_nowait()
+            assert callback == desktop.chat_finished and event == {}, (callback, event)
+    finally:
+        desktop.messages = original_queue
+        with desktop.drain_lock:
+            desktop.drain_pending = original_pending
 
 
 def main():
@@ -71,6 +109,7 @@ def main():
                 assert ready_path.stat().st_mode & 0o777 == 0o600
             desktop = Desktop()
             until(lambda: bool(desktop.config))
+            verify_worker_queue_backpressure(desktop)
             desktop.send(prompt='What time is it?')
             until(lambda: not desktop.running)
             assert 'It is ' in desktop.buffer.get_text(desktop.buffer.get_start_iter(), desktop.buffer.get_end_iter(), True)
@@ -109,7 +148,7 @@ def main():
             image = Gdk.pixbuf_get_from_window(window, 0, 0, width, height)
             image.savev(str(root / 'docs/desktop-tested.png'), 'png', [], [])
             results = {'environment': 'Ubuntu 24.04 container, GTK3 on Xvfb; test fixture AI',
-                       'checks': ['framed IPC status', 'native GTK launch', 'deterministic command', 'true SSE token display', 'local history', 'memory save/view', 'route label', 'Core failure leaves desktop responsive', 'Assistant prompt and Send controls visible at default window size'],
+                       'checks': ['framed IPC status', 'native GTK launch', 'deterministic command', 'true SSE token display', 'local history', 'memory save/view', 'route label', 'Core failure leaves desktop responsive', 'Assistant prompt and Send controls visible at default window size', 'bounded GTK event queue preserves chat completion under backpressure'],
                        'transport': 'TEST ONLY loopback fixture; Unix bind prohibited here' if loopback else 'production Unix socket',
                        'unix_permissions': 'UNTESTED here' if loopback else 'TESTED 0600',
                        'core': call({'method': 'status'})['value']['core_memory'], 'desktop_with_test_harness': resource(os.getpid()),
