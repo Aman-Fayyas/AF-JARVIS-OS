@@ -127,10 +127,12 @@ class Config:
         try:
             self.data.update(changes)
             self.validate()
+            # A failed disk write must not leave privacy settings changed only
+            # in memory; the caller receives an error and expects old settings.
+            self.persist()
         except Exception:
             self.data = old
             raise
-        self.persist()
 
     def persist(self):
         keys = {"mode", "memory_enabled", "history_enabled", "retention_days", "cloud_enabled", "nodes", "cloud", "voice"}
@@ -143,6 +145,9 @@ class Config:
         if not set(changes) <= allowed:
             raise ValueError("Unsupported provider setting")
         old = copy.deepcopy(self.data)
+        key_path = None
+        previous_key = None
+        had_previous_key = False
         profile = next((p for p in self.data.get("nodes", []) + self.data.get("cloud", []) if p["id"] == ident), None)
         if not profile:
             raise ValueError("Unknown provider")
@@ -153,13 +158,26 @@ class Config:
                 if len(key) > 4096 or any(c.isspace() for c in key):
                     raise ValueError("Invalid key")
                 relative = Path(profile["key_file"])
-                path = self.directory / relative
-                if relative.is_absolute() or ".." in relative.parts or not path.resolve().is_relative_to(self.directory.resolve()):
+                key_path = self.directory / relative
+                if relative.is_absolute() or ".." in relative.parts or not key_path.resolve().is_relative_to(self.directory.resolve()):
                     raise ValueError("Invalid key file")
-                atomic_write(path, key + "\n")
+                try:
+                    previous_key = secure_read(key_path)
+                    had_previous_key = True
+                except FileNotFoundError:
+                    pass
+                atomic_write(key_path, key + "\n")
             self.persist()
         except Exception:
             self.data = old
+            if key_path is not None:
+                try:
+                    if had_previous_key:
+                        atomic_write(key_path, previous_key)
+                    else:
+                        key_path.unlink(missing_ok=True)
+                except OSError as rollback_error:
+                    raise RuntimeError("Provider update failed and its key file could not be rolled back") from rollback_error
             raise
 
     def update_voice(self, model):
