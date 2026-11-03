@@ -148,6 +148,7 @@ class Config:
         key_path = None
         previous_key = None
         had_previous_key = False
+        key_written = False
         profile = next((p for p in self.data.get("nodes", []) + self.data.get("cloud", []) if p["id"] == ident), None)
         if not profile:
             raise ValueError("Unknown provider")
@@ -167,10 +168,11 @@ class Config:
                 except FileNotFoundError:
                     pass
                 atomic_write(key_path, key + "\n")
+                key_written = True
             self.persist()
         except Exception:
             self.data = old
-            if key_path is not None:
+            if key_written and key_path is not None:
                 try:
                     if had_previous_key:
                         atomic_write(key_path, previous_key)
