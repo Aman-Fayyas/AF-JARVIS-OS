@@ -396,6 +396,31 @@ class CoreTests(unittest.TestCase):
                 self.core.config.update_voice('/models/vosk')
         self.assertEqual(self.core.config.data['voice'], original)
 
+    def test_preferences_persistence_failure_rolls_back_live_privacy_settings(self):
+        original = copy.deepcopy(self.core.config.data)
+        with patch('jarvis.config.atomic_write', side_effect=OSError('disk full')):
+            with self.assertRaisesRegex(OSError, 'disk full'):
+                self.core.config.preferences({'history_enabled': False, 'cloud_enabled': True})
+        self.assertEqual(self.core.config.data, original)
+
+    def test_provider_key_is_restored_when_preferences_commit_fails(self):
+        profile = next(p for p in self.core.config.data['nodes'] if p['id'] == 'tablet')
+        key_path = self.core.config.directory / profile['key_file']
+        original_key = secure_read(key_path)
+        original_model = profile['model']
+        write = atomic_write
+
+        def fail_preferences(path, data):
+            if Path(path).name == 'preferences.json':
+                raise OSError('disk full')
+            return write(path, data)
+
+        with patch('jarvis.config.atomic_write', side_effect=fail_preferences):
+            with self.assertRaisesRegex(OSError, 'disk full'):
+                self.core.config.update_profile('tablet', {'model': 'replacement-model'}, 'replacement-key')
+        self.assertEqual(secure_read(key_path), original_key)
+        self.assertEqual(next(p for p in self.core.config.data['nodes'] if p['id'] == 'tablet')['model'], original_model)
+
     def test_privacy_changes_blocked_during_generation(self):
         stream = self.core.request({'method': 'chat', 'prompt': 'RAM?'})
         next(stream)
