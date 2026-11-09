@@ -71,6 +71,8 @@ class CameraEngine(
     private var previewSurface: Surface? = null
     private var previewBuilder: CaptureRequest.Builder? = null
     private var characteristics: CameraCharacteristics? = null
+    private var jpegReader: ImageReader? = null
+    private var rawReader: ImageReader? = null
 
     private var previewSize = Size(1280, 720)
     private var jpegSize = Size(4000, 3000)
@@ -109,6 +111,7 @@ class CameraEngine(
     fun stop() {
         if (recording) stopVideoImmediately()
         closeCameraResources()
+        saveExecutor.shutdown()
         cameraThread?.quitSafely()
         cameraThread = null
         cameraHandler = null
@@ -519,7 +522,7 @@ class CameraEngine(
 
         rawReader = if (rawAdvertised) {
             ImageReader.newInstance(
-                rawSize.width, rawSize.height, ImageFormat.RAW_SENSOR, 2
+                rawSize.width, rawSize.height, ImageFormat.RAW_SENSOR, 1
             ).also { reader ->
                 reader.setOnImageAvailableListener({ source ->
                     val image = try {
@@ -541,6 +544,11 @@ class CameraEngine(
 
     private fun configurePreviewSession(includeRaw: Boolean) {
         val device = cameraDevice ?: return
+        try {
+            captureSession?.close()
+        } catch (_: Exception) {
+        }
+        captureSession = null
         val texture = previewView.surfaceTexture ?: return
         try {
             texture.setDefaultBufferSize(previewSize.width, previewSize.height)
