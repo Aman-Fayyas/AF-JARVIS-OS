@@ -64,6 +64,11 @@ class CameraEngine(
         activity.getSystemService(Context.CAMERA_SERVICE) as CameraManager
     private val saveExecutor = Executors.newSingleThreadExecutor()
 
+    private companion object {
+        const val MAX_JPEG_PIXELS = 14_000_000L
+        const val MAX_RAW_PIXELS = 24_000_000L
+    }
+
     private var cameraThread: HandlerThread? = null
     private var cameraHandler: Handler? = null
     private var cameraDevice: CameraDevice? = null
@@ -475,26 +480,40 @@ class CameraEngine(
                     val aspect = it.width.toDouble() / it.height.toDouble()
                     abs(aspect - (16.0 / 9.0)) * 100_000.0 +
                         abs(it.width * it.height - 1280 * 720).toDouble()
+                } ?: previewSizes.minByOrNull {
+                    it.width.toLong() * it.height.toLong()
                 } ?: previewSizes.first()
         }
 
+        // Keep the app memory-safe on high-megapixel devices such as the S23 Ultra.
+        // Prefer a sensor output <= 14 MP for JPEG and <= 24 MP for DNG.
         val jpegSizes = map?.getOutputSizes(ImageFormat.JPEG)?.toList().orEmpty()
-        if (jpegSizes.isNotEmpty()) {
-            jpegSize = jpegSizes
-                .filter { it.width.toLong() * it.height.toLong() <= 14_000_000L }
-                .maxByOrNull { it.width.toLong() * it.height.toLong() }
-                ?: jpegSizes.minByOrNull {
-                    abs(it.width.toLong() * it.height.toLong() - 12_000_000L)
-                } ?: jpegSizes.first()
+        val safeJpegSizes = jpegSizes.filter {
+            it.width.toLong() * it.height.toLong() <= MAX_JPEG_PIXELS
+        }
+        if (safeJpegSizes.isNotEmpty()) {
+            jpegSize = safeJpegSizes.maxByOrNull {
+                it.width.toLong() * it.height.toLong()
+            } ?: safeJpegSizes.first()
+        } else if (jpegSizes.isNotEmpty()) {
+            jpegSize = jpegSizes.minByOrNull {
+                it.width.toLong() * it.height.toLong()
+            } ?: jpegSizes.first()
         }
 
         val rawSizes = map?.getOutputSizes(ImageFormat.RAW_SENSOR)?.toList().orEmpty()
-        if (rawSizes.isNotEmpty()) {
+        val safeRawSizes = rawSizes.filter {
+            it.width.toLong() * it.height.toLong() <= MAX_RAW_PIXELS
+        }
+        if (safeRawSizes.isNotEmpty()) {
             val wantedArea = jpegSize.width.toLong() * jpegSize.height.toLong()
-            rawSize = rawSizes.minByOrNull {
+            rawSize = safeRawSizes.minByOrNull {
                 abs(it.width.toLong() * it.height.toLong() - wantedArea)
-            } ?: rawSizes.first()
+            } ?: safeRawSizes.first()
         } else {
+            // A single 200 MP RAW allocation would be too costly for this lightweight app.
+            // Prefer an honest JPEG-only fallback to risking an out-of-memory failure.
+            rawAdvertised = false
             rawSize = jpegSize
         }
     }
