@@ -140,47 +140,44 @@ object FilterEngine {
                 val blue = pixel and 0xff
                 val luminance = 0.2126f * red + 0.7152f * green + 0.0722f * blue
 
-                val adjusted = when (preset) {
-                    FilterPreset.ORIGINAL -> intArrayOf(red, green, blue)
+                var outRed = red
+                var outGreen = green
+                var outBlue = blue
+
+                when (preset) {
+                    FilterPreset.ORIGINAL -> Unit
                     FilterPreset.GOLDEN_HOUR -> {
-                        val contrast = 1.04f
-                        intArrayOf(
-                            tone(red, contrast, 17f),
-                            tone(green, contrast, 7f),
-                            tone(blue, contrast, -15f)
-                        )
+                        outRed = tone(red, 1.04f, 17f)
+                        outGreen = tone(green, 1.04f, 7f)
+                        outBlue = tone(blue, 1.04f, -15f)
                     }
                     FilterPreset.SOFT_FILM -> {
-                        val contrast = 0.91f
-                        intArrayOf(
-                            tone(red, contrast, 10f),
-                            tone(green, contrast, 7f),
-                            tone(blue, contrast, 4f)
-                        )
+                        outRed = tone(red, 0.91f, 10f)
+                        outGreen = tone(green, 0.91f, 7f)
+                        outBlue = tone(blue, 0.91f, 4f)
                     }
                     FilterPreset.CINEMATIC -> {
                         val shadowCool = (1f - luminance / 255f).coerceIn(0f, 1f) * 10f
                         val highlightWarm = (luminance / 255f).coerceIn(0f, 1f) * 9f
-                        intArrayOf(
-                            tone(red, 1.12f, highlightWarm),
-                            tone(green, 1.12f, 0f),
-                            tone(blue, 1.12f, shadowCool - 2f)
-                        )
+                        outRed = tone(red, 1.12f, highlightWarm)
+                        outGreen = tone(green, 1.12f, 0f)
+                        outBlue = tone(blue, 1.12f, shadowCool - 2f)
                     }
-                    FilterPreset.COOL_FADE -> intArrayOf(
-                        tone(red, 0.92f, 3f),
-                        tone(green, 0.92f, 8f),
-                        tone(blue, 0.92f, 19f)
-                    )
+                    FilterPreset.COOL_FADE -> {
+                        outRed = tone(red, 0.92f, 3f)
+                        outGreen = tone(green, 0.92f, 8f)
+                        outBlue = tone(blue, 0.92f, 19f)
+                    }
                     FilterPreset.MONO -> {
                         val gray = tone(luminance.roundToInt(), 1.06f, 0f)
-                        intArrayOf(gray, gray, gray)
+                        outRed = gray
+                        outGreen = gray
+                        outBlue = gray
                     }
                 }
 
                 pixels[index] = (alpha shl 24) or
-                    (adjusted[0] shl 16) or
-                    (adjusted[1] shl 8) or adjusted[2]
+                    (outRed shl 16) or (outGreen shl 8) or outBlue
             }
 
             bitmap.setPixels(pixels, 0, width, 0, top, width, rows)
