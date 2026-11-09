@@ -5,6 +5,9 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.MediaStore
@@ -30,6 +33,7 @@ class MainActivity : Activity(), CameraEngine.Listener {
     private val olive = Color.rgb(91, 101, 73)
 
     private lateinit var preview: TextureView
+    private lateinit var previewOverlay: PreviewOverlay
     private lateinit var status: TextView
     private lateinit var rawBadge: TextView
     private lateinit var shutter: FrameLayout
@@ -50,6 +54,7 @@ class MainActivity : Activity(), CameraEngine.Listener {
     private var cameraEngine: CameraEngine? = null
     private var capabilities: CameraCapabilities? = null
     private var selectedFilter = FilterPreset.ORIGINAL
+    private var selectedAspect = "4:3"
     private var videoMode = false
     private var recording = false
     private var manualMode = false
@@ -71,7 +76,10 @@ class MainActivity : Activity(), CameraEngine.Listener {
             override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
                 startCameraIfAllowed()
             }
-            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) = Unit
+            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
+                cameraEngine?.configureTransform(width, height)
+                previewOverlay.invalidate()
+            }
             override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean = true
             override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
         }
@@ -144,6 +152,18 @@ class MainActivity : Activity(), CameraEngine.Listener {
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
         ))
 
+        previewOverlay = PreviewOverlay(this)
+        stage.addView(previewOverlay, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        stage.setOnTouchListener { _, event ->
+            if (event.action == android.view.MotionEvent.ACTION_UP) {
+                status.text = "Preview framing · tap the focus controls below"
+            }
+            true
+        }
+
         val previewLabel = text("GRAIN  •  LIVE VIEW", 10f, Color.WHITE, true).apply {
             setPadding(dp(12), dp(8), dp(12), dp(8))
             background = rounded(Color.argb(180, 30, 34, 29), dp(18))
@@ -204,11 +224,12 @@ class MainActivity : Activity(), CameraEngine.Listener {
                 setPadding(dp(14), dp(9), dp(14), dp(9))
                 setOnClickListener {
                     selectedFilter = preset
+                    previewOverlay.setLook(preset)
                     refreshFilterChips(filterRow)
                     status.text = if (preset == FilterPreset.ORIGINAL) {
-                        "DNG + original JPEG · no look applied"
+                        "Original look · unfiltered JPEG + DNG"
                     } else {
-                        preset.title + " will be saved as a JPEG copy; DNG stays untouched"
+                        preset.title + " · original JPEG + filtered JPEG + untouched DNG"
                     }
                 }
                 tag = preset
@@ -220,6 +241,40 @@ class MainActivity : Activity(), CameraEngine.Listener {
         filterScroll.addView(filterRow)
         bottom.addView(filterScroll, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(46)
+        ))
+
+        val ratioHeader = text("FRAME", 9f, muted, true).apply {
+            letterSpacing = 0.16f
+            setPadding(0, dp(3), 0, 0)
+        }
+        bottom.addView(ratioHeader, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(18)
+        ))
+        val ratioScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+        }
+        val ratioRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        listOf("4:3", "16:9", "1:1", "FULL").forEach { ratio ->
+            val chip = text(ratio, 10f, ink, true).apply {
+                gravity = Gravity.CENTER
+                setPadding(dp(15), dp(7), dp(15), dp(7))
+                tag = ratio
+                setOnClickListener {
+                    selectedAspect = ratio
+                    applyAspectRatio()
+                    refreshAspectChips(ratioRow)
+                }
+            }
+            ratioRow.addView(chip, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(34)
+            ).apply { marginEnd = dp(7) })
+        }
+        ratioScroll.addView(ratioRow)
+        bottom.addView(ratioScroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(39)
         ))
 
         advancedPanel = buildAdvancedPanel()
@@ -311,6 +366,9 @@ class MainActivity : Activity(), CameraEngine.Listener {
         ))
         setContentView(root)
         refreshFilterChips(filterRow)
+        refreshAspectChips(ratioRow)
+        applyAspectRatio()
+        previewOverlay.setLook(selectedFilter)
     }
 
     private fun buildAdvancedPanel(): LinearLayout {
@@ -334,6 +392,7 @@ class MainActivity : Activity(), CameraEngine.Listener {
                 manualMode = !manualMode
                 cameraEngine?.setManualMode(manualMode)
                 text = if (manualMode) "AE MANUAL" else "AE AUTO"
+                if (manualMode) applyManualSettings()
                 status.text = if (manualMode) "Manual ISO and shutter active" else "Auto exposure active"
             }
         }
@@ -348,8 +407,7 @@ class MainActivity : Activity(), CameraEngine.Listener {
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                     val caps = capabilities ?: return
-                    val iso = caps.minIso +
-                        ((caps.maxIso - caps.minIso).toDouble() * progress / 100.0).toInt()
+                    val iso = isoAtProgress(progress, caps)
                     isoValue.text = "ISO " + iso
                     if (fromUser) applyManualSettings(iso = iso)
                 }
@@ -452,9 +510,10 @@ class MainActivity : Activity(), CameraEngine.Listener {
     }
 
     private fun interpolateExposure(progress: Int, caps: CameraCapabilities): Long {
-        val min = caps.minExposureNs.coerceAtLeast(125_000L)
-        val max = caps.maxExposureNs.coerceAtMost(1_000_000_000L)
-        return min + ((max - min).toDouble() * progress.coerceIn(0, 100) / 100.0).toLong()
+        val min = caps.minExposureNs.coerceAtLeast(125_000L).toDouble()
+        val max = caps.maxExposureNs.coerceAtMost(1_000_000_000L).toDouble()
+        val fraction = progress.coerceIn(0, 100) / 100.0
+        return (min * Math.pow(max / min, fraction)).toLong()
     }
 
     private fun formatShutter(ns: Long): String {
@@ -462,6 +521,58 @@ class MainActivity : Activity(), CameraEngine.Listener {
         val denominator = (1_000_000_000.0 / ns).toInt()
         return if (denominator >= 2) "1/" + denominator
         else String.format(Locale.US, "%.2f ms", ns / 1_000_000.0)
+    }
+
+    private fun isoAtProgress(progress: Int, caps: CameraCapabilities): Int {
+        val min = caps.minIso.coerceAtLeast(1).toDouble()
+        val max = caps.maxIso.coerceAtLeast(caps.minIso).toDouble()
+        val fraction = progress.coerceIn(0, 100) / 100.0
+        return (min * Math.pow(max / min, fraction)).toInt().coerceIn(
+            caps.minIso, caps.maxIso
+        )
+    }
+
+    private fun progressForIso(value: Int, caps: CameraCapabilities): Int {
+        val min = caps.minIso.coerceAtLeast(1).toDouble()
+        val max = caps.maxIso.coerceAtLeast(caps.minIso).toDouble()
+        if (max <= min) return 0
+        return (Math.log(value.coerceIn(caps.minIso, caps.maxIso) / min) /
+            Math.log(max / min) * 100.0).toInt().coerceIn(0, 100)
+    }
+
+    private fun progressForExposure(value: Long, caps: CameraCapabilities): Int {
+        val min = caps.minExposureNs.coerceAtLeast(125_000L).toDouble()
+        val max = caps.maxExposureNs.coerceAtMost(1_000_000_000L).toDouble()
+        if (max <= min) return 0
+        return (Math.log(value.coerceIn(min.toLong(), max.toLong()) / min) /
+            Math.log(max / min) * 100.0).toInt().coerceIn(0, 100)
+    }
+
+    private fun aspectValue(): Float = when (selectedAspect) {
+        "4:3" -> 4f / 3f
+        "16:9" -> 16f / 9f
+        "1:1" -> 1f
+        else -> 0f
+    }
+
+    private fun applyAspectRatio() {
+        cameraEngine?.setAspectRatio(aspectValue())
+        if (::previewOverlay.isInitialized) previewOverlay.setAspect(aspectValue())
+        status.text = if (selectedAspect == "FULL") {
+            "Full sensor frame selected"
+        } else {
+            selectedAspect + " frame · original and filtered JPEGs use this crop"
+        }
+    }
+
+    private fun refreshAspectChips(row: LinearLayout) {
+        for (index in 0 until row.childCount) {
+            val chip = row.getChildAt(index) as? TextView ?: continue
+            val ratio = chip.tag as? String ?: continue
+            val selected = ratio == selectedAspect
+            chip.setTextColor(if (selected) Color.WHITE else ink)
+            chip.background = rounded(if (selected) olive else panel, dp(16))
+        }
     }
 
     private fun refreshFilterChips(row: LinearLayout) {
@@ -572,6 +683,22 @@ class MainActivity : Activity(), CameraEngine.Listener {
                 else "MANUAL SENSOR CONTROLS UNAVAILABLE"
             isoSeek.isEnabled = capabilities.manualSensor
             exposureSeek.isEnabled = capabilities.manualSensor
+            if (capabilities.manualSensor) {
+                isoSeek.progress = progressForIso(100.coerceIn(
+                    capabilities.minIso, capabilities.maxIso
+                ), capabilities)
+                exposureSeek.progress = progressForExposure(
+                    10_000_000L.coerceIn(
+                        capabilities.minExposureNs,
+                        capabilities.maxExposureNs
+                    ),
+                    capabilities
+                )
+                isoValue.text = "ISO " + isoAtProgress(isoSeek.progress, capabilities)
+                exposureValue.text = "SHUTTER  " + formatShutter(
+                    interpolateExposure(exposureSeek.progress, capabilities)
+                )
+            }
             focusSeek.isEnabled = capabilities.minFocusDistance > 0f
             if (capabilities.minFocusDistance <= 0f) focusValue.text = "FOCUS  AUTO"
         }
@@ -625,6 +752,79 @@ class MainActivity : Activity(), CameraEngine.Listener {
                 if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) {
                     status.text = "Recording video without microphone audio."
                 }
+            }
+        }
+    }
+
+
+    private inner class PreviewOverlay(context: android.content.Context) : View(context) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private var look = FilterPreset.ORIGINAL
+        private var aspect = 4f / 3f
+
+        init {
+            isClickable = false
+            isFocusable = false
+        }
+
+        fun setLook(value: FilterPreset) {
+            look = value
+            invalidate()
+        }
+
+        fun setAspect(value: Float) {
+            aspect = value
+            invalidate()
+        }
+
+        override fun onDraw(canvas: android.graphics.Canvas) {
+            super.onDraw(canvas)
+            val viewWidth = width.toFloat()
+            val viewHeight = height.toFloat()
+            if (viewWidth <= 0f || viewHeight <= 0f) return
+
+            val frame = if (aspect <= 0f) {
+                RectF(0f, 0f, viewWidth, viewHeight)
+            } else {
+                val frameAspect = if (viewWidth >= viewHeight) aspect else 1f / aspect
+                val viewAspect = viewWidth / viewHeight
+                if (viewAspect > frameAspect) {
+                    val frameWidth = viewHeight * frameAspect
+                    val left = (viewWidth - frameWidth) / 2f
+                    RectF(left, 0f, left + frameWidth, viewHeight)
+                } else {
+                    val frameHeight = viewWidth / frameAspect
+                    val top = (viewHeight - frameHeight) / 2f
+                    RectF(0f, top, viewWidth, top + frameHeight)
+                }
+            }
+
+            val tint = when (look) {
+                FilterPreset.ORIGINAL -> Color.TRANSPARENT
+                FilterPreset.GOLDEN_HOUR -> Color.argb(24, 255, 169, 74)
+                FilterPreset.SOFT_FILM -> Color.argb(20, 218, 181, 137)
+                FilterPreset.CINEMATIC -> Color.argb(18, 33, 49, 65)
+                FilterPreset.COOL_FADE -> Color.argb(26, 91, 151, 194)
+                FilterPreset.MONO -> Color.argb(25, 185, 185, 185)
+            }
+            if (tint != Color.TRANSPARENT) {
+                paint.color = tint
+                canvas.drawRect(frame, paint)
+            }
+
+            if (aspect > 0f) {
+                val outside = Path().apply {
+                    fillType = Path.FillType.EVEN_ODD
+                    addRect(RectF(0f, 0f, viewWidth, viewHeight), Path.Direction.CW)
+                    addRect(frame, Path.Direction.CCW)
+                }
+                paint.color = Color.argb(126, 0, 0, 0)
+                canvas.drawPath(outside, paint)
+                paint.color = Color.argb(220, 255, 255, 255)
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = dp(1).toFloat()
+                canvas.drawRect(frame, paint)
+                paint.style = Paint.Style.FILL
             }
         }
     }
