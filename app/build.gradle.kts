@@ -11,8 +11,8 @@ android {
         applicationId = "com.aman.grain"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.2.0"
         testInstrumentationRunner = "android.test.runner.AndroidJUnitRunner"
     }
 
@@ -45,5 +45,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.camera.viewfinder:viewfinder-view:1.6.2")
+    implementation("androidx.camera.viewfinder:viewfinder-core:1.6.2")
     testImplementation("junit:junit:4.13.2")
 }

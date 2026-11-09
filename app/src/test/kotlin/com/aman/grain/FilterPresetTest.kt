@@ -14,6 +14,12 @@ class FilterPresetTest {
     @Test
     fun originalIsTheDefaultUnfilteredPreset() {
         assertEquals(FilterPreset.ORIGINAL, FilterPreset.values().first())
-        assertTrue(FilterPreset.values().any { it == FilterPreset.GOLDEN_HOUR })
+        assertTrue(FilterPreset.values().size >= 14)
+    }
+
+    @Test
+    fun everyNonOriginalPresetHasAUniqueDisplayName() {
+        val names = FilterPreset.values().map { it.title.lowercase() }
+        assertEquals(names.size, names.toSet().size)
     }
 }

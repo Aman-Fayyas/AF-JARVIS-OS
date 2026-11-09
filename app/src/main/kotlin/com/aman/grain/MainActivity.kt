@@ -2,43 +2,47 @@ package com.aman.grain
 
 import android.Manifest
 import android.app.Activity
+import android.content.res.Configuration
+import android.content.res.ColorStateList
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.Gravity
-import android.graphics.SurfaceTexture
-import android.view.TextureView
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import java.util.Locale
+import androidx.camera.viewfinder.core.ScaleType
+import androidx.camera.viewfinder.view.ViewfinderView
 
 class MainActivity : Activity(), CameraEngine.Listener {
-    private val paper = Color.rgb(240, 237, 227)
-    private val panel = Color.rgb(229, 224, 211)
-    private val ink = Color.rgb(39, 43, 36)
-    private val muted = Color.rgb(112, 113, 99)
-    private val amber = Color.rgb(183, 131, 54)
-    private val olive = Color.rgb(91, 101, 73)
+    private val paper = Color.rgb(9, 11, 10)
+    private val panel = Color.rgb(30, 33, 31)
+    private val ink = Color.rgb(245, 245, 239)
+    private val muted = Color.rgb(164, 166, 158)
+    private val amber = Color.rgb(246, 190, 61)
+    private val olive = Color.rgb(246, 190, 61)
 
-    private lateinit var preview: TextureView
+    private lateinit var preview: ViewfinderView
     private lateinit var previewOverlay: PreviewOverlay
     private lateinit var status: TextView
     private lateinit var rawBadge: TextView
     private lateinit var shutter: FrameLayout
     private lateinit var advancedPanel: LinearLayout
     private lateinit var advancedToggle: TextView
+    private lateinit var filtersPanel: LinearLayout
+    private lateinit var filterToggle: TextView
     private lateinit var isoSeek: SeekBar
     private lateinit var exposureSeek: SeekBar
     private lateinit var focusSeek: SeekBar
@@ -69,21 +73,12 @@ class MainActivity : Activity(), CameraEngine.Listener {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.statusBarColor = paper
         window.navigationBarColor = paper
-        window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        window.decorView.systemUiVisibility = 0
+        selectedAspect = savedInstanceState?.getString("selectedAspect") ?: "4:3"
+        selectedFilter = savedInstanceState?.getString("selectedFilter")?.let { value ->
+            runCatching { FilterPreset.valueOf(value) }.getOrNull()
+        } ?: FilterPreset.ORIGINAL
         buildInterface()
-
-        preview.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-            override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
-                startCameraIfAllowed()
-            }
-            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
-                cameraEngine?.configureTransform(width, height)
-                previewOverlay.invalidate()
-            }
-            override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean = true
-            override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
-        }
 
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.CAMERA), REQUEST_CAMERA)
@@ -94,7 +89,13 @@ class MainActivity : Activity(), CameraEngine.Listener {
 
     override fun onResume() {
         super.onResume()
-        if (::preview.isInitialized && preview.isAvailable) startCameraIfAllowed()
+        if (::preview.isInitialized) startCameraIfAllowed()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("selectedAspect", selectedAspect)
+        outState.putString("selectedFilter", selectedFilter.name)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onPause() {
@@ -105,14 +106,19 @@ class MainActivity : Activity(), CameraEngine.Listener {
 
     private fun startCameraIfAllowed() {
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return
-        if (!preview.isAvailable) return
         if (cameraEngine == null) cameraEngine = CameraEngine(this, preview, this)
         cameraEngine?.setAspectRatio(aspectValue())
         cameraEngine?.start()
     }
 
     private fun buildInterface() {
+        val landscape = resources.configuration.orientation ==
+            Configuration.ORIENTATION_LANDSCAPE
         val root = LinearLayout(this).apply {
+            orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            setBackgroundColor(paper)
+        }
+        val sideDock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(paper)
         }
@@ -142,13 +148,19 @@ class MainActivity : Activity(), CameraEngine.Listener {
             setOnClickListener { toggleAdvanced() }
         }
         header.addView(advancedToggle)
-        root.addView(header, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(62)
-        ))
+        if (landscape) {
+            sideDock.addView(header, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(60)
+            ))
+        } else {
+            root.addView(header, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(62)
+            ))
+        }
 
         val stage = FrameLayout(this).apply { setBackgroundColor(Color.rgb(31, 34, 29)) }
-        preview = TextureView(this).apply {
-            isOpaque = true
+        preview = ViewfinderView(this).apply {
+            setScaleType(ScaleType.FIT_CENTER)
         }
         stage.addView(preview, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
@@ -158,13 +170,6 @@ class MainActivity : Activity(), CameraEngine.Listener {
         stage.addView(previewOverlay, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
         ))
-
-        stage.setOnTouchListener { _, event ->
-            if (event.action == android.view.MotionEvent.ACTION_UP) {
-                status.text = "Preview framing · tap the focus controls below"
-            }
-            true
-        }
 
         val previewLabel = text("GRAIN  •  LIVE VIEW", 10f, Color.WHITE, true).apply {
             setPadding(dp(12), dp(8), dp(12), dp(8))
@@ -196,20 +201,51 @@ class MainActivity : Activity(), CameraEngine.Listener {
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
             Gravity.CENTER
         ))
-        root.addView(stage, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
+        if (landscape) {
+            root.addView(stage, LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.MATCH_PARENT, 1f
+            ))
+        } else {
+            root.addView(stage, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            ))
+        }
 
         val bottom = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(10), dp(16), dp(10))
+            setPadding(
+                dp(if (landscape) 10 else 16),
+                dp(if (landscape) 6 else 10),
+                dp(if (landscape) 10 else 16),
+                dp(if (landscape) 6 else 10)
+            )
             setBackgroundColor(paper)
         }
 
-        val filterTitle = text("LOOKS", 9f, muted, true).apply {
-            letterSpacing = 0.16f
+        filterToggle = text(
+            "LOOKS  ·  " + selectedFilter.title.uppercase(Locale.US) + "  +",
+            9f, ink, true
+        ).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            letterSpacing = 0.08f
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = rounded(panel, dp(12))
+            setOnClickListener { toggleFilters() }
         }
-        bottom.addView(filterTitle, LinearLayout.LayoutParams(
+        bottom.addView(filterToggle, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(38)
+        ))
+
+        filtersPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            setPadding(0, dp(5), 0, dp(2))
+        }
+        val filterTitle = text(
+            "CHOOSE A LOOK  ·  APPLIED TO THE SAVED JPEG",
+            8f, muted, true
+        ).apply { letterSpacing = 0.07f }
+        filtersPanel.addView(filterTitle, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(18)
         ))
 
@@ -221,31 +257,37 @@ class MainActivity : Activity(), CameraEngine.Listener {
             gravity = Gravity.CENTER_VERTICAL
         }
         FilterPreset.values().forEach { preset ->
-            val chip = text(preset.title, 11f, ink, true).apply {
+            val chip = text(preset.title, 10f, ink, true).apply {
                 gravity = Gravity.CENTER
-                setPadding(dp(14), dp(9), dp(14), dp(9))
+                setPadding(dp(13), dp(9), dp(13), dp(9))
+                background = rounded(panel, dp(18))
                 setOnClickListener {
                     selectedFilter = preset
-                    previewOverlay.setLook(preset)
                     refreshFilterChips(filterRow)
+                    filtersPanel.visibility = View.GONE
+                    filterToggle.text =
+                        "LOOKS  ·  " + selectedFilter.title.uppercase(Locale.US) + "  +"
                     status.text = if (preset == FilterPreset.ORIGINAL) {
-                        "Original look · unfiltered JPEG + DNG"
+                        "Original JPEG · no look · DNG stays untouched"
                     } else {
-                        preset.title + " · original JPEG + filtered JPEG + untouched DNG"
+                        preset.title + " look selected · saved JPEG only · DNG stays untouched"
                     }
                 }
                 tag = preset
             }
             filterRow.addView(chip, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, dp(38)
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(36)
             ).apply { marginEnd = dp(7) })
         }
         filterScroll.addView(filterRow)
-        bottom.addView(filterScroll, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(46)
+        filtersPanel.addView(filterScroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(42)
+        ))
+        bottom.addView(filtersPanel, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ))
 
-        val ratioHeader = text("FRAME", 9f, muted, true).apply {
+        val ratioHeader = text("PHOTO RATIO", 9f, muted, true).apply {
             letterSpacing = 0.16f
             setPadding(0, dp(3), 0, 0)
         }
@@ -259,10 +301,18 @@ class MainActivity : Activity(), CameraEngine.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        listOf("4:3", "16:9", "1:1", "FULL").forEach { ratio ->
-            val chip = text(ratio, 10f, ink, true).apply {
+        val portrait = resources.configuration.orientation ==
+            Configuration.ORIENTATION_PORTRAIT
+        val ratioOptions = listOf(
+            (if (portrait) "3:4" else "4:3") to "4:3",
+            (if (portrait) "9:16" else "16:9") to "16:9",
+            "1:1" to "1:1",
+            "FULL" to "FULL"
+        )
+        ratioOptions.forEach { (label, ratio) ->
+            val chip = text(label, 10f, ink, true).apply {
                 gravity = Gravity.CENTER
-                setPadding(dp(15), dp(7), dp(15), dp(7))
+                setPadding(dp(13), dp(7), dp(13), dp(7))
                 tag = ratio
                 setOnClickListener {
                     selectedAspect = ratio
@@ -363,14 +413,26 @@ class MainActivity : Activity(), CameraEngine.Listener {
             LinearLayout.LayoutParams.MATCH_PARENT, dp(32)
         ))
 
-        root.addView(bottom, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
+        if (landscape) {
+            val scroll = ScrollView(this).apply {
+                isFillViewport = true
+                addView(bottom)
+            }
+            sideDock.addView(scroll, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            ))
+            root.addView(sideDock, LinearLayout.LayoutParams(dp(276),
+                LinearLayout.LayoutParams.MATCH_PARENT))
+        } else {
+            root.addView(bottom, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ))
+        }
         setContentView(root)
         refreshFilterChips(filterRow)
         refreshAspectChips(ratioRow)
         applyAspectRatio()
-        previewOverlay.setLook(selectedFilter)
+        filterToggle.text = "LOOKS  ·  " + selectedFilter.title.uppercase(Locale.US) + "  +"
     }
 
     private fun buildAdvancedPanel(): LinearLayout {
@@ -404,6 +466,8 @@ class MainActivity : Activity(), CameraEngine.Listener {
         isoValue = text("ISO 100", 10f, ink, true)
         panelView.addView(isoValue)
         isoSeek = SeekBar(this).apply {
+            progressTintList = ColorStateList.valueOf(amber)
+            thumbTintList = ColorStateList.valueOf(amber)
             max = 100
             progress = 20
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -426,6 +490,8 @@ class MainActivity : Activity(), CameraEngine.Listener {
         exposureValue = text("SHUTTER  1/100", 10f, ink, true)
         panelView.addView(exposureValue)
         exposureSeek = SeekBar(this).apply {
+            progressTintList = ColorStateList.valueOf(amber)
+            thumbTintList = ColorStateList.valueOf(amber)
             max = 100
             progress = 35
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -478,6 +544,8 @@ class MainActivity : Activity(), CameraEngine.Listener {
         panelView.addView(focusRow)
 
         focusSeek = SeekBar(this).apply {
+            progressTintList = ColorStateList.valueOf(amber)
+            thumbTintList = ColorStateList.valueOf(amber)
             max = 100
             progress = 0
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -573,9 +641,20 @@ class MainActivity : Activity(), CameraEngine.Listener {
         cameraEngine?.setAspectRatio(aspectValue())
         if (::previewOverlay.isInitialized) previewOverlay.setAspect(aspectValue())
         status.text = if (selectedAspect == "FULL") {
-            "Full sensor frame selected"
+            "Full sensor frame · no crop"
         } else {
-            selectedAspect + " frame · original and filtered JPEGs use this crop"
+            aspectLabel() + " crop · live preview remains full-frame"
+        }
+    }
+
+    private fun aspectLabel(): String {
+        val portrait = resources.configuration.orientation ==
+            Configuration.ORIENTATION_PORTRAIT
+        return when (selectedAspect) {
+            "4:3" -> if (portrait) "3:4" else "4:3"
+            "16:9" -> if (portrait) "9:16" else "16:9"
+            "1:1" -> "1:1"
+            else -> "FULL"
         }
     }
 
@@ -584,8 +663,8 @@ class MainActivity : Activity(), CameraEngine.Listener {
             val chip = row.getChildAt(index) as? TextView ?: continue
             val ratio = chip.tag as? String ?: continue
             val selected = ratio == selectedAspect
-            chip.setTextColor(if (selected) Color.WHITE else ink)
-            chip.background = rounded(if (selected) olive else panel, dp(16))
+            chip.setTextColor(if (selected) Color.BLACK else ink)
+            chip.background = rounded(if (selected) amber else panel, dp(16))
         }
     }
 
@@ -594,22 +673,22 @@ class MainActivity : Activity(), CameraEngine.Listener {
             val chip = row.getChildAt(index) as? TextView ?: continue
             val preset = chip.tag as? FilterPreset ?: continue
             val selected = preset == selectedFilter
-            chip.setTextColor(if (selected) Color.WHITE else ink)
-            chip.background = rounded(if (selected) olive else panel, dp(18))
+            chip.setTextColor(if (selected) Color.BLACK else ink)
+            chip.background = rounded(if (selected) amber else panel, dp(18))
         }
     }
 
     private fun setVideoMode(enabled: Boolean) {
         videoMode = enabled
-        modePhoto.background = rounded(if (!enabled) olive else panel, dp(18))
-        modeVideo.background = rounded(if (enabled) olive else panel, dp(18))
-        modePhoto.setTextColor(if (!enabled) Color.WHITE else ink)
-        modeVideo.setTextColor(if (enabled) Color.WHITE else ink)
+        modePhoto.background = rounded(if (!enabled) amber else panel, dp(18))
+        modeVideo.background = rounded(if (enabled) amber else panel, dp(18))
+        modePhoto.setTextColor(if (!enabled) Color.BLACK else ink)
+        modeVideo.setTextColor(if (enabled) Color.BLACK else ink)
         flashButton.visibility = if (enabled) View.INVISIBLE else View.VISIBLE
         status.text = if (enabled) {
-            "Standard MP4 video · no AI looks · mic permission optional"
+            "MP4 video · filter tray is for photos"
         } else {
-            "Still photo · DNG RAW + original JPEG when supported"
+            "Photo · original JPEG + DNG RAW when supported"
         }
     }
 
@@ -635,6 +714,13 @@ class MainActivity : Activity(), CameraEngine.Listener {
         val visible = advancedPanel.visibility == View.VISIBLE
         advancedPanel.visibility = if (visible) View.GONE else View.VISIBLE
         advancedToggle.text = if (visible) "CONTROLS  +" else "CONTROLS  −"
+    }
+
+    private fun toggleFilters() {
+        val visible = filtersPanel.visibility == View.VISIBLE
+        filtersPanel.visibility = if (visible) View.GONE else View.VISIBLE
+        filterToggle.text = "LOOKS  ·  " +
+            selectedFilter.title.uppercase(Locale.US) + if (visible) "  +" else "  −"
     }
 
     private fun openGallery() {
@@ -773,17 +859,11 @@ class MainActivity : Activity(), CameraEngine.Listener {
 
     private inner class PreviewOverlay(context: android.content.Context) : View(context) {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private var look = FilterPreset.ORIGINAL
         private var aspect = 4f / 3f
 
         init {
             isClickable = false
             isFocusable = false
-        }
-
-        fun setLook(value: FilterPreset) {
-            look = value
-            invalidate()
         }
 
         fun setAspect(value: Float) {
@@ -813,31 +893,25 @@ class MainActivity : Activity(), CameraEngine.Listener {
                 }
             }
 
-            val tint = when (look) {
-                FilterPreset.ORIGINAL -> Color.TRANSPARENT
-                FilterPreset.GOLDEN_HOUR -> Color.argb(24, 255, 169, 74)
-                FilterPreset.SOFT_FILM -> Color.argb(20, 218, 181, 137)
-                FilterPreset.CINEMATIC -> Color.argb(18, 33, 49, 65)
-                FilterPreset.COOL_FADE -> Color.argb(26, 91, 151, 194)
-                FilterPreset.MONO -> Color.argb(25, 185, 185, 185)
-            }
-            if (tint != Color.TRANSPARENT) {
-                paint.color = tint
-                canvas.drawRect(frame, paint)
-            }
-
             if (aspect > 0f) {
-                val outside = Path().apply {
-                    fillType = Path.FillType.EVEN_ODD
-                    addRect(RectF(0f, 0f, viewWidth, viewHeight), Path.Direction.CW)
-                    addRect(frame, Path.Direction.CCW)
-                }
-                paint.color = Color.argb(126, 0, 0, 0)
-                canvas.drawPath(outside, paint)
-                paint.color = Color.argb(220, 255, 255, 255)
+                // Simple framing guides only. The live image is never darkened
+                // or scaled when the selected saved-photo ratio changes.
+                paint.color = Color.argb(115, 255, 255, 255)
                 paint.style = Paint.Style.STROKE
                 paint.strokeWidth = dp(1).toFloat()
                 canvas.drawRect(frame, paint)
+
+                paint.color = Color.argb(60, 255, 255, 255)
+                val thirdW = frame.width() / 3f
+                val thirdH = frame.height() / 3f
+                canvas.drawLine(frame.left + thirdW, frame.top,
+                    frame.left + thirdW, frame.bottom, paint)
+                canvas.drawLine(frame.left + 2f * thirdW, frame.top,
+                    frame.left + 2f * thirdW, frame.bottom, paint)
+                canvas.drawLine(frame.left, frame.top + thirdH,
+                    frame.right, frame.top + thirdH, paint)
+                canvas.drawLine(frame.left, frame.top + 2f * thirdH,
+                    frame.right, frame.top + 2f * thirdH, paint)
                 paint.style = Paint.Style.FILL
             }
         }

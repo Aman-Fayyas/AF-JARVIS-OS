@@ -6,8 +6,6 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.ImageFormat
-import android.graphics.Matrix
-import android.graphics.RectF
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCaptureSession
@@ -31,7 +29,12 @@ import android.provider.MediaStore
 import android.util.Range
 import android.util.Size
 import android.view.Surface
-import android.view.TextureView
+import androidx.camera.viewfinder.core.ImplementationMode
+import androidx.camera.viewfinder.core.ScaleType
+import androidx.camera.viewfinder.core.ViewfinderSurfaceRequest
+import androidx.camera.viewfinder.core.ViewfinderSurfaceSession
+import androidx.camera.viewfinder.core.camera2.Camera2TransformationInfo
+import androidx.camera.viewfinder.view.ViewfinderView
 import java.io.File
 import java.io.FileInputStream
 import java.io.OutputStream
@@ -39,6 +42,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
 
 data class CameraCapabilities(
@@ -53,7 +57,7 @@ data class CameraCapabilities(
 
 class CameraEngine(
     private val activity: Activity,
-    private val previewView: TextureView,
+    private val previewView: ViewfinderView,
     private val listener: Listener
 ) {
     interface Listener {
@@ -78,6 +82,8 @@ class CameraEngine(
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
     private var previewSurface: Surface? = null
+    private var viewfinderSession: ViewfinderSurfaceSession? = null
+    private val viewfinderGeneration = AtomicInteger(0)
     private var previewBuilder: CaptureRequest.Builder? = null
     private var characteristics: CameraCharacteristics? = null
     private var jpegReader: ImageReader? = null
@@ -144,10 +150,9 @@ class CameraEngine(
 
     fun setAspectRatio(ratio: Float) {
         selectedAspectRatio = if (ratio > 0f) ratio else 0f
-        configureTransform(previewView.width, previewView.height)
         listener.onStatus(
             if (selectedAspectRatio == 0f) "Full sensor framing selected"
-            else "Frame set to " + String.format(Locale.US, "%.2f:1", selectedAspectRatio)
+            else "Photo crop set to " + String.format(Locale.US, "%.2f:1", selectedAspectRatio)
         )
     }
 
@@ -158,50 +163,12 @@ class CameraEngine(
     }
 
     fun configureTransform(viewWidth: Int, viewHeight: Int) {
-        if (viewWidth <= 0 || viewHeight <= 0) return
-        val chars = characteristics ?: return
-        val sensorOrientation =
-            chars.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
-        val rotation = activity.windowManager.defaultDisplay.rotation
-        val displayDegrees = when (rotation) {
-            Surface.ROTATION_0 -> 0
-            Surface.ROTATION_90 -> 90
-            Surface.ROTATION_180 -> 180
-            else -> 270
+        // ViewfinderView owns sensor/display rotation and scaling. FIT_CENTER
+        // preserves the complete live field of view; saved-photo framing is
+        // handled only by the JPEG renderer.
+        if (viewWidth > 0 && viewHeight > 0) {
+            previewView.setScaleType(ScaleType.FIT_CENTER)
         }
-        val front = chars.get(CameraCharacteristics.LENS_FACING) ==
-            CameraCharacteristics.LENS_FACING_FRONT
-        val relativeRotation = if (front) {
-            (sensorOrientation + displayDegrees) % 360
-        } else {
-            (sensorOrientation - displayDegrees + 360) % 360
-        }
-
-        val rotatedWidth = if (relativeRotation == 90 || relativeRotation == 270) {
-            previewSize.height.toFloat()
-        } else {
-            previewSize.width.toFloat()
-        }
-        val rotatedHeight = if (relativeRotation == 90 || relativeRotation == 270) {
-            previewSize.width.toFloat()
-        } else {
-            previewSize.height.toFloat()
-        }
-        val scale = maxOf(
-            viewWidth.toFloat() / rotatedWidth,
-            viewHeight.toFloat() / rotatedHeight
-        )
-        val centerX = viewWidth / 2f
-        val centerY = viewHeight / 2f
-        val matrix = Matrix().apply {
-            setTranslate(
-                centerX - previewSize.width / 2f,
-                centerY - previewSize.height / 2f
-            )
-            postRotate(relativeRotation.toFloat(), centerX, centerY)
-            postScale(scale, scale, centerX, centerY)
-        }
-        previewView.setTransform(matrix)
     }
 
     fun setExposureCompensation(steps: Int) {
@@ -660,15 +627,84 @@ class CameraEngine(
         } catch (_: Exception) {
         }
         captureSession = null
-        val texture = previewView.surfaceTexture ?: return
-        try {
-            texture.setDefaultBufferSize(previewSize.width, previewSize.height)
-            configureTransform(previewView.width, previewView.height)
-            previewSurface?.release()
-            previewSurface = Surface(texture)
 
+        val existingSurface = previewSurface
+        if (existingSurface != null && viewfinderSession != null) {
+            createPreviewCaptureSession(device, includeRaw, existingSurface)
+            return
+        }
+
+        val chars = characteristics ?: return
+        val generation = viewfinderGeneration.incrementAndGet()
+        activity.runOnUiThread {
+            previewView.post {
+                if (generation != viewfinderGeneration.get() || cameraDevice !== device) {
+                    return@post
+                }
+                try {
+                    previewView.setScaleType(ScaleType.FIT_CENTER)
+                    previewView.setTransformationInfo(
+                        Camera2TransformationInfo.createFromCharacteristics(chars)
+                    )
+                    val request = ViewfinderSurfaceRequest(
+                        previewSize.width,
+                        previewSize.height,
+                        ImplementationMode.EMBEDDED
+                    )
+                    val future = previewView.requestSurfaceSessionAsync(request)
+                    future.addListener({
+                        try {
+                            val newSession = future.get()
+                            val handler = cameraHandler
+                            if (handler == null) {
+                                newSession.close()
+                                return@addListener
+                            }
+                            handler.post {
+                                if (generation != viewfinderGeneration.get() ||
+                                    cameraDevice !== device
+                                ) {
+                                    newSession.close()
+                                    return@post
+                                }
+                                viewfinderSession?.close()
+                                viewfinderSession = newSession
+                                previewSurface = newSession.surface
+                                createPreviewCaptureSession(device, includeRaw, newSession.surface)
+                            }
+                        } catch (error: Exception) {
+                            cameraHandler?.post {
+                                if (generation == viewfinderGeneration.get()) {
+                                    listener.onError(
+                                        "Viewfinder setup failed: " +
+                                            (error.cause?.message ?: error.message ?: "unknown")
+                                    )
+                                }
+                            }
+                        }
+                    }, activity.mainExecutor)
+                } catch (error: Exception) {
+                    cameraHandler?.post {
+                        if (generation == viewfinderGeneration.get()) {
+                            listener.onError(
+                                "Viewfinder setup failed: " + (error.message ?: "unknown")
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun createPreviewCaptureSession(
+        device: CameraDevice,
+        includeRaw: Boolean,
+        surface: Surface
+    ) {
+        val handler = cameraHandler ?: return
+        try {
             val outputs = mutableListOf<Surface>()
-            outputs.add(previewSurface!!)
+            outputs.add(surface)
             jpegReader?.surface?.let { outputs.add(it) }
             if (includeRaw) rawReader?.surface?.let { outputs.add(it) }
 
@@ -682,17 +718,17 @@ class CameraEngine(
                             val builder = device.createCaptureRequest(
                                 CameraDevice.TEMPLATE_PREVIEW
                             )
-                            builder.addTarget(previewSurface!!)
+                            builder.addTarget(surface)
                             applyControls(builder, still = false)
                             previewBuilder = builder
-                            session.setRepeatingRequest(builder.build(), null, cameraHandler)
+                            session.setRepeatingRequest(builder.build(), null, handler)
                             if (rawSessionActive) {
-                                listener.onStatus("DNG RAW ready · JPEG pair enabled")
+                                listener.onStatus("DNG RAW ready · original + selected-look JPEG")
                             } else if (rawAdvertised) {
-                                listener.onStatus("Preview ready · RAW stream not available in this session")
+                                listener.onStatus("Preview ready · this lens uses JPEG capture")
                                 listener.onCapabilities(currentCapabilities(raw = false))
                             } else {
-                                listener.onStatus("Preview ready · JPEG capture")
+                                listener.onStatus("Preview ready · high-quality JPEG capture")
                             }
                         } catch (error: Exception) {
                             listener.onError("Preview setup failed: " + error.message)
@@ -710,7 +746,7 @@ class CameraEngine(
                         }
                     }
                 },
-                cameraHandler
+                handler
             )
         } catch (error: Exception) {
             if (includeRaw) {
@@ -781,7 +817,7 @@ class CameraEngine(
             builder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
         }
 
-        if (still) builder.set(CaptureRequest.JPEG_QUALITY, 96.toByte())
+        if (still) builder.set(CaptureRequest.JPEG_QUALITY, 98.toByte())
     }
 
     private fun updatePreview() {
@@ -829,7 +865,7 @@ class CameraEngine(
                 jpegBytes,
                 filter,
                 desiredOutputAspectRatio(),
-                quality = 96
+                quality = 98
             )
             val stamp = timestamp()
 
@@ -950,8 +986,7 @@ class CameraEngine(
         }
         val isFront = characteristics?.get(CameraCharacteristics.LENS_FACING) ==
             CameraCharacteristics.LENS_FACING_FRONT
-        return if (isFront) (sensor + degrees) % 360
-        else (sensor - degrees + 360) % 360
+        return CameraGeometry.jpegOrientation(sensor, degrees, isFront)
     }
 
     private fun dngExifOrientation(): Int = when (jpegOrientation()) {
@@ -965,6 +1000,7 @@ class CameraEngine(
         SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
 
     private fun closeCameraResources() {
+        viewfinderGeneration.incrementAndGet()
         try {
             captureSession?.close()
         } catch (_: Exception) {
@@ -973,16 +1009,17 @@ class CameraEngine(
         previewBuilder = null
 
         try {
+            viewfinderSession?.close()
+        } catch (_: Exception) {
+        }
+        viewfinderSession = null
+        previewSurface = null
+
+        try {
             cameraDevice?.close()
         } catch (_: Exception) {
         }
         cameraDevice = null
-
-        try {
-            previewSurface?.release()
-        } catch (_: Exception) {
-        }
-        previewSurface = null
 
         try {
             jpegReader?.close()
