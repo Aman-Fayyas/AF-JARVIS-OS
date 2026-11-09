@@ -9,7 +9,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.Gravity
-import android.view.SurfaceTexture
+import android.graphics.SurfaceTexture
 import android.view.TextureView
 import android.view.View
 import android.view.WindowManager
