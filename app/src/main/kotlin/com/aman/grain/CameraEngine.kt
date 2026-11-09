@@ -18,6 +18,7 @@ import android.hardware.camera2.DngCreator
 import android.hardware.camera2.TotalCaptureResult
 import android.media.Image
 import android.media.ImageReader
+import android.media.ExifInterface
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Environment
@@ -755,7 +756,7 @@ class CameraEngine(
                         "image/x-adobe-dng"
                     ) { output ->
                         DngCreator(characteristics!!, result).use { creator ->
-                            creator.setOrientation(1)
+                            creator.setOrientation(dngExifOrientation())
                             creator.writeImage(output, rawImage)
                         }
                     }
@@ -844,6 +845,13 @@ class CameraEngine(
             CameraCharacteristics.LENS_FACING_FRONT
         return if (isFront) (sensor + degrees) % 360
         else (sensor - degrees + 360) % 360
+    }
+
+    private fun dngExifOrientation(): Int = when (jpegOrientation()) {
+        90 -> ExifInterface.ORIENTATION_ROTATE_90
+        180 -> ExifInterface.ORIENTATION_ROTATE_180
+        270 -> ExifInterface.ORIENTATION_ROTATE_270
+        else -> ExifInterface.ORIENTATION_NORMAL
     }
 
     private fun timestamp(): String =
