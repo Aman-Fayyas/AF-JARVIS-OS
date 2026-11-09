@@ -47,6 +47,7 @@ class MainActivity : Activity(), CameraEngine.Listener {
     private lateinit var focusValue: TextView
     private lateinit var wbButton: TextView
     private lateinit var manualButton: TextView
+    private lateinit var focusAutoButton: TextView
     private lateinit var flashButton: TextView
     private lateinit var modePhoto: TextView
     private lateinit var modeVideo: TextView
@@ -106,6 +107,7 @@ class MainActivity : Activity(), CameraEngine.Listener {
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return
         if (!preview.isAvailable) return
         if (cameraEngine == null) cameraEngine = CameraEngine(this, preview, this)
+        cameraEngine?.setAspectRatio(aspectValue())
         cameraEngine?.start()
     }
 
@@ -449,6 +451,18 @@ class MainActivity : Activity(), CameraEngine.Listener {
         }
         focusValue = text("FOCUS  AUTO", 10f, ink, true)
         focusRow.addView(focusValue, LinearLayout.LayoutParams(0, dp(28), 1f))
+        focusAutoButton = text("AF AUTO", 9f, olive, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(9), dp(7), dp(9), dp(7))
+            background = rounded(paper, dp(12))
+            setOnClickListener {
+                cameraEngine?.clearManualFocus()
+                focusSeek.progress = 0
+                focusValue.text = "FOCUS  AUTO"
+                status.text = "Continuous autofocus restored"
+            }
+        }
+        focusRow.addView(focusAutoButton)
         wbButton = text("WB  AUTO", 9f, olive, true).apply {
             gravity = Gravity.CENTER
             setPadding(dp(10), dp(7), dp(10), dp(7))
