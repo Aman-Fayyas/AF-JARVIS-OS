@@ -47,5 +47,7 @@ android {
 dependencies {
     implementation("androidx.camera.viewfinder:viewfinder-view:1.6.2")
     implementation("androidx.camera.viewfinder:viewfinder-core:1.6.2")
+    // ViewfinderView exposes ListenableFuture in its public async surface API.
+    implementation("com.google.guava:listenablefuture:1.0")
     testImplementation("junit:junit:4.13.2")
 }
