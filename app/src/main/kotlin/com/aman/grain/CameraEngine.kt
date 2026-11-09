@@ -237,6 +237,11 @@ class CameraEngine(
         updatePreview()
     }
 
+    fun clearManualFocus() {
+        manualFocusDistance = null
+        updatePreview()
+    }
+
     fun setWhiteBalance(name: String) {
         val requested = when (name.lowercase(Locale.US)) {
             "daylight" -> CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT
