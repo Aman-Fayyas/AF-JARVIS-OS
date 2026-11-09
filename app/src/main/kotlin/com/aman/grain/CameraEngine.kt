@@ -6,6 +6,8 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.ImageFormat
+import android.graphics.Matrix
+import android.graphics.RectF
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCaptureSession
@@ -100,6 +102,8 @@ class CameraEngine(
     private var manualFocusDistance: Float? = null
     private var whiteBalanceMode = CaptureRequest.CONTROL_AWB_MODE_AUTO
     private var flashEnabled = false
+    private var selectedAspectRatio = 4f / 3f
+    private var exposureCompensation = 0
 
     private val pendingLock = Any()
     private var pendingJpeg: Image? = null
@@ -138,6 +142,76 @@ class CameraEngine(
         updatePreview()
     }
 
+    fun setAspectRatio(ratio: Float) {
+        selectedAspectRatio = if (ratio > 0f) ratio else 0f
+        configureTransform(previewView.width, previewView.height)
+        listener.onStatus(
+            if (selectedAspectRatio == 0f) "Full sensor framing selected"
+            else "Frame set to " + String.format(Locale.US, "%.2f:1", selectedAspectRatio)
+        )
+    }
+
+    fun desiredOutputAspectRatio(): Float {
+        if (selectedAspectRatio <= 0f) return 0f
+        val portrait = previewView.height >= previewView.width
+        return if (portrait) 1f / selectedAspectRatio else selectedAspectRatio
+    }
+
+    fun configureTransform(viewWidth: Int, viewHeight: Int) {
+        if (viewWidth <= 0 || viewHeight <= 0) return
+        val chars = characteristics ?: return
+        val sensorOrientation =
+            chars.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
+        val rotation = activity.windowManager.defaultDisplay.rotation
+        val displayDegrees = when (rotation) {
+            Surface.ROTATION_0 -> 0
+            Surface.ROTATION_90 -> 90
+            Surface.ROTATION_180 -> 180
+            else -> 270
+        }
+        val front = chars.get(CameraCharacteristics.LENS_FACING) ==
+            CameraCharacteristics.LENS_FACING_FRONT
+        val relativeRotation = if (front) {
+            (sensorOrientation + displayDegrees) % 360
+        } else {
+            (sensorOrientation - displayDegrees + 360) % 360
+        }
+
+        val rotatedWidth = if (relativeRotation == 90 || relativeRotation == 270) {
+            previewSize.height.toFloat()
+        } else {
+            previewSize.width.toFloat()
+        }
+        val rotatedHeight = if (relativeRotation == 90 || relativeRotation == 270) {
+            previewSize.width.toFloat()
+        } else {
+            previewSize.height.toFloat()
+        }
+        val scale = maxOf(
+            viewWidth.toFloat() / rotatedWidth,
+            viewHeight.toFloat() / rotatedHeight
+        )
+        val centerX = viewWidth / 2f
+        val centerY = viewHeight / 2f
+        val matrix = Matrix().apply {
+            setTranslate(
+                centerX - previewSize.width / 2f,
+                centerY - previewSize.height / 2f
+            )
+            postRotate(relativeRotation.toFloat(), centerX, centerY)
+            postScale(scale, scale, centerX, centerY)
+        }
+        previewView.setTransform(matrix)
+    }
+
+    fun setExposureCompensation(steps: Int) {
+        val range = characteristics?.get(
+            CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE
+        ) ?: return
+        exposureCompensation = steps.coerceIn(range.lower, range.upper)
+        updatePreview()
+    }
+
     fun setManualMode(enabled: Boolean) {
         manualExposureEnabled = enabled && manualSensor
         updatePreview()
@@ -164,14 +238,25 @@ class CameraEngine(
     }
 
     fun setWhiteBalance(name: String) {
-        whiteBalanceMode = when (name.lowercase(Locale.US)) {
+        val requested = when (name.lowercase(Locale.US)) {
             "daylight" -> CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT
             "cloudy" -> CaptureRequest.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT
             "tungsten" -> CaptureRequest.CONTROL_AWB_MODE_INCANDESCENT
             "fluorescent" -> CaptureRequest.CONTROL_AWB_MODE_FLUORESCENT
             else -> CaptureRequest.CONTROL_AWB_MODE_AUTO
         }
+        val available = characteristics?.get(
+            CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES
+        ) ?: intArrayOf(CaptureRequest.CONTROL_AWB_MODE_AUTO)
+        whiteBalanceMode = if (available.contains(requested)) {
+            requested
+        } else {
+            CaptureRequest.CONTROL_AWB_MODE_AUTO
+        }
         updatePreview()
+        if (whiteBalanceMode != requested) {
+            listener.onStatus("That white balance preset is not supported by this lens")
+        }
     }
 
     fun takePhoto(filter: FilterPreset) {
@@ -573,6 +658,7 @@ class CameraEngine(
         val texture = previewView.surfaceTexture ?: return
         try {
             texture.setDefaultBufferSize(previewSize.width, previewSize.height)
+            configureTransform(previewView.width, previewView.height)
             previewSurface?.release()
             previewSurface = Surface(texture)
 
@@ -660,6 +746,15 @@ class CameraEngine(
             builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, manualExposureNs)
         } else {
             builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+            val aeRange = characteristics?.get(
+                CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE
+            )
+            if (aeRange != null) {
+                builder.set(
+                    CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION,
+                    exposureCompensation.coerceIn(aeRange.lower, aeRange.upper)
+                )
+            }
         }
 
         builder.set(CaptureRequest.CONTROL_AWB_MODE, whiteBalanceMode)
@@ -725,6 +820,12 @@ class CameraEngine(
             val jpegBytes = jpegImage.planes[0].buffer.let { buffer ->
                 ByteArray(buffer.remaining()).also { buffer.get(it) }
             }
+            val rendered = FilterEngine.renderCapture(
+                jpegBytes,
+                filter,
+                desiredOutputAspectRatio(),
+                quality = 96
+            )
             val stamp = timestamp()
 
             writeToMediaStore(
@@ -732,20 +833,18 @@ class CameraEngine(
                 "GRAIN_" + stamp + "_ORIGINAL.jpg",
                 "image/jpeg"
             ) { output ->
-                output.write(jpegBytes)
+                output.write(rendered.originalJpeg)
             }
 
-            var filterSaved = false
-            if (filter != FilterPreset.ORIGINAL) {
-                val filtered = FilterEngine.applyToJpeg(jpegBytes, filter)
+            val filteredBytes = rendered.filteredJpeg
+            if (filteredBytes != null) {
                 writeToMediaStore(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     "GRAIN_" + stamp + "_" + filter.fileTag + ".jpg",
                     "image/jpeg"
                 ) { output ->
-                    output.write(filtered)
+                    output.write(filteredBytes)
                 }
-                filterSaved = true
             }
 
             var rawSaved = false
@@ -771,10 +870,12 @@ class CameraEngine(
                 append("Saved ")
                 if (rawSaved) append("DNG RAW + ")
                 append("original JPEG")
-                if (filterSaved) append(" + " + filter.title + " JPEG")
+                if (filteredBytes != null) append(" + " + filter.title + " JPEG")
                 append(" · DCIM/Grain Camera")
             }
             listener.onPhotoSaved(description)
+        } catch (error: OutOfMemoryError) {
+            listener.onError("Not enough memory to render this photo. Try the Full or 4:3 frame.")
         } catch (error: Exception) {
             listener.onError("Could not save photo: " + (error.message ?: "unknown"))
         } finally {
