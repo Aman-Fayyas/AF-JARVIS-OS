@@ -27,7 +27,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.14"
 
       - name: Configure Android SDK
         shell: bash
@@ -44,9 +44,9 @@ jobs:
           echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
 
-      - name: Install Android 35 platform
+      - name: Install Android 36 platform
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
 
       - name: Run three verification passes before packaging
         shell: bash
